@@ -1,2 +1,62 @@
-# hack-b18c30d4-kazhydromet-ai
-Hackathon team repository for Kazhydromet AI
+# FinAgent — AI-агент для анализа банковских транзакций
+
+HackAlem AI 2026 · трек «Финансы» · команда Kazhydromet AI
+
+> **Статус:** до старта хакатона в репозиторий добавлен только технический каркас (FastAPI + OpenAI Agents SDK + дашборд) и синтетические демо-данные. Логика под конкретное задание добавляется 23.09.2026.
+
+**Проблема:** _одна фраза, какую боль решаем и для кого._
+**Решение:** AI-агент, который сам ходит в данные, находит аномалии и объясняет их человеческим языком.
+**Эффект:** _цифра: минут сэкономлено / ₸ предотвращено / % точности._
+
+## Запуск за 1 минуту
+
+```powershell
+uv venv --python 3.12 .venv
+uv pip install --python .venv\Scripts\python.exe -r requirements.txt
+copy .env.example .env   # впиши OPENAI_API_KEY
+.\run.ps1                # http://localhost:8000
+```
+
+macOS и Linux:
+
+```bash
+uv venv --python 3.12 .venv
+uv pip install -r requirements.txt
+cp .env.example .env
+.venv/bin/python -m uvicorn app.main:app --reload --port 8000
+```
+
+Без ключа приложение работает в демо-режиме: показывает реальные цифры из данных, но без ответов LLM.
+
+## Архитектура
+
+```
+Браузер (web/index.html)
+   │  /api/chat
+FastAPI (app/main.py) ──► Агент (OpenAI Agents SDK, app/agent.py)
+                               │ function calling
+                               ▼
+                        Инструменты (app/tools.py) ──► данные (pandas)
+```
+
+| Инструмент агента | Что делает |
+|---|---|
+| `get_summary` | Общая статистика и разбивка по категориям |
+| `find_anomalies` | Подозрительные операции (z-score по клиенту) |
+| `client_profile` | Профиль клиента и его риски |
+| `search_transactions` | Поиск по категории, городу, сумме |
+
+## Данные
+
+`data/transactions.csv` — 3 088 синтетических транзакций по 60 клиентам, сгенерированы `scripts/gen_data.py`
+(города Казахстана, тенге, метка подозрительных операций). Реальных персональных данных нет.
+
+## Работа в команде
+
+Каждый работает в своей папке, чтобы не было конфликтов: `app/` — бэкенд и агент, `web/` — интерфейс,
+`data/` и `docs/` — данные и материалы. Перед каждым `git push` делаем `git pull --rebase`.
+Ключи только в `.env`, в репозиторий они не попадают.
+
+## Сделано с Codex
+
+_Заполнить на хакатоне: какие части сгенерировал Codex и как его использовали._

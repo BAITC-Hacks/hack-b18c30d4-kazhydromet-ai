@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FinAgent — AI-аналитик транзакций</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+<header class="bg-slate-900 text-white">
+  <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-emerald-500 grid place-items-center font-bold">F</div>
+      <div><div class="font-semibold">FinAgent</div><div class="text-xs text-slate-400">AI-агент для антифрода и аналитики</div></div>
+    </div>
+    <span id="mode" class="text-xs px-2 py-1 rounded bg-slate-700">…</span>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-4 py-6 grid gap-6 lg:grid-cols-5">
+  <section class="lg:col-span-3 space-y-6">
+    <div id="kpis" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+    <div class="bg-white rounded-xl shadow-sm p-4">
+      <h2 class="font-semibold mb-3">Траты по категориям</h2>
+      <canvas id="chart" height="140"></canvas>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-4 overflow-x-auto">
+      <h2 class="font-semibold mb-3">Аномалии <span class="text-xs text-slate-400">(z-score &gt; 3)</span></h2>
+      <table class="w-full text-sm"><thead class="text-left text-slate-500"><tr>
+        <th class="py-1">Время</th><th>Клиент</th><th>Сумма</th><th>Город</th><th>z</th></tr></thead>
+        <tbody id="anoms"></tbody></table>
+    </div>
+  </section>
+
+  <section class="lg:col-span-2 bg-white rounded-xl shadow-sm flex flex-col h-[80vh] lg:sticky lg:top-4">
+    <div class="p-4 border-b font-semibold">Чат с агентом</div>
+    <div id="log" class="flex-1 overflow-y-auto p-4 space-y-3 text-sm"></div>
+    <div class="px-4 pb-2 flex flex-wrap gap-2" id="hints"></div>
+    <form id="f" class="p-4 border-t flex gap-2">
+      <input id="q" class="flex-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Спроси про транзакции…" autocomplete="off">
+      <button class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4">→</button>
+    </form>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const fmt = n => new Intl.NumberFormat('ru-RU').format(n);
+const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const history = [];
+
+async function load() {
+  const [h, s, a] = await Promise.all(['/api/health', '/api/summary', '/api/anomalies'].map(u => fetch(u).then(r => r.json())));
+  $('#mode').textContent = h.live ? `LIVE · ${h.model}` : 'DEMO · без ключа';
+  $('#mode').className = 'text-xs px-2 py-1 rounded ' + (h.live ? 'bg-emerald-600' : 'bg-amber-600');
+  $('#kpis').innerHTML = [
+    ['Транзакций', fmt(s.transactions)], ['Оборот', fmt(s.total_kzt) + ' ₸'],
+    ['Клиентов', fmt(s.clients)], ['Подозрительных', fmt(s.flagged)],
+  ].map(([k, v]) => `<div class="bg-white rounded-xl shadow-sm p-4"><div class="text-xs text-slate-500">${k}</div><div class="text-xl font-semibold mt-1">${v}</div></div>`).join('');
+  new Chart($('#chart'), {
+    type: 'bar',
+    data: { labels: Object.keys(s.by_category), datasets: [{ data: Object.values(s.by_category), backgroundColor: '#10b981', borderRadius: 6 }] },
+    options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: v => fmt(v) } } } },
+  });
+  $('#anoms').innerHTML = a.map(t => `<tr class="border-t"><td class="py-1">${t.ts.slice(0, 16).replace('T', ' ')}</td><td>${t.client_id}</td>
+    <td class="font-medium text-rose-600">${fmt(t.amount_kzt)} ₸</td><td>${t.city}</td><td>${t.z}</td></tr>`).join('');
+}
+
+function bubble(role, html) {
+  const el = document.createElement('div');
+  el.className = role === 'user' ? 'ml-auto max-w-[85%] bg-emerald-600 text-white rounded-2xl rounded-br-sm px-3 py-2'
+                                 : 'max-w-[90%] bg-slate-100 rounded-2xl rounded-bl-sm px-3 py-2';
+  el.innerHTML = html;
+  $('#log').append(el);
+  $('#log').scrollTop = 1e9;
+  return el;
+}
+
+async function send(text) {
+  bubble('user', esc(text));
+  history.push({ role: 'user', content: text });
+  const wait = bubble('assistant', '<span class="animate-pulse text-slate-400">Агент думает…</span>');
+  try {
+    const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: history }) }).then(r => r.json());
+    history.push({ role: 'assistant', content: r.reply });
+    const trace = r.trace.map(t => `<span class="inline-block text-[11px] bg-white border rounded px-1.5 py-0.5 mr-1 mb-1" title="${esc(t.args)}">🔧 ${esc(t.tool)}</span>`).join('');
+    wait.innerHTML = (trace ? `<div class="mb-1">${trace}</div>` : '') + esc(r.reply).replace(/\n/g, '<br>');
+  } catch (e) {
+    wait.innerHTML = '<span class="text-rose-600">Ошибка связи с сервером</span>';
+  }
+}
+
+$('#f').onsubmit = e => { e.preventDefault(); const q = $('#q').value.trim(); if (q) { $('#q').value = ''; send(q); } };
+['Покажи самые подозрительные операции', 'Профиль клиента C007', 'Крупные переводы в Алматы', 'Где больше всего тратят?']
+  .forEach(h => { const b = document.createElement('button'); b.className = 'text-xs border rounded-full px-3 py-1 hover:bg-slate-100'; b.textContent = h; b.onclick = () => send(h); $('#hints').append(b); });
+bubble('assistant', 'Привет! Я AI-аналитик транзакций. Спроси про аномалии, клиентов или категории трат.');
+load();
+</script>
+</body>
+</html>
