@@ -28,12 +28,19 @@ if ($Codex) {
     $stat = (git diff --cached --stat | Out-String)
     if ($stat.Length -gt 2000) { $stat = $stat.Substring(0, 2000) }
     $tmp = [IO.Path]::GetTempFileName()
-    $prompt = "Вот git diff --stat перед коммитом:`n$stat`nНапиши ОДНУ строку commit message на английском, до 60 символов, повелительное наклонение. Ответь только этой строкой, без пояснений."
+    $in = [IO.Path]::GetTempFileName()
+    # Промпт отдаём через stdin: иначе PowerShell разобьёт его на отдельные аргументы
+    @"
+Вот git diff --stat перед коммитом:
+$stat
+Напиши ОДНУ строку commit message на английском, до 60 символов, повелительное наклонение.
+Ответь только этой строкой, без пояснений и кавычек.
+"@ | Set-Content $in -Encoding utf8
     try {
-        $p = Start-Process 'codex.cmd' -ArgumentList @('exec', '-s', 'read-only', '--skip-git-repo-check', $prompt) `
-            -NoNewWindow -PassThru -RedirectStandardOutput $tmp -WorkingDirectory $RepoPath
+        $p = Start-Process 'codex.cmd' -ArgumentList @('exec', '-s', 'read-only', '-') `
+            -NoNewWindow -PassThru -RedirectStandardInput $in -RedirectStandardOutput $tmp -WorkingDirectory $RepoPath
         if ($p.WaitForExit(120000)) {
-            $line = (Get-Content $tmp | Where-Object { $_.Trim() } | Select-Object -Last 1)
+            $line = (Get-Content $tmp -Encoding utf8 | Where-Object { $_.Trim() } | Select-Object -Last 1)
             if ($line -and $line.Trim().Length -lt 80) { $msg = "auto: " + $line.Trim() }
         } else {
             $p.Kill()
@@ -42,7 +49,7 @@ if ($Codex) {
     } catch {
         Log "Codex недоступен: $($_.Exception.Message)"
     }
-    Remove-Item $tmp -ErrorAction SilentlyContinue
+    Remove-Item $tmp, $in -ErrorAction SilentlyContinue
 }
 
 git commit -q -m $msg
