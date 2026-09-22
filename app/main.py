@@ -1,11 +1,11 @@
 import os
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import tools
+from . import dataset, tools
 from .agent import MODEL, ask
 
 app = FastAPI(title="HackAlem Starter")
@@ -28,6 +28,25 @@ def summary():
 @app.get("/api/anomalies")
 def anomalies(z: float = 3.0, limit: int = 10):
     return tools.find_anomalies(z, limit)
+
+
+@app.get("/api/dataset")
+def dataset_info():
+    return dataset.info()
+
+
+@app.post("/api/dataset/upload")
+async def upload(file: UploadFile = File(...)):
+    """Загрузить свой CSV или Excel — он станет активным датасетом для агента."""
+    try:
+        return dataset.save_upload(file.filename, await file.read())
+    except Exception as e:
+        raise HTTPException(400, f"Не смог прочитать файл: {e}")
+
+
+@app.post("/api/dataset/reset")
+def dataset_reset():
+    return dataset.reset()
 
 
 @app.post("/api/chat")

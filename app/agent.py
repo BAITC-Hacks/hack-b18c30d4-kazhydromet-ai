@@ -4,13 +4,15 @@ import os
 
 from agents import Agent, Runner, function_tool
 
-from . import tools
+from . import dataset, tools
 
 MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 
 INSTRUCTIONS = """Ты — AI-аналитик банковских транзакций для сотрудника банка (антифрод и аналитика клиентов).
 Правила:
 - Любые цифры бери только из инструментов, ничего не выдумывай.
+- Если вопрос про загруженные данные или ты не знаешь, какие колонки есть, — СНАЧАЛА вызови dataset_info,
+  и только потом query_data. Не угадывай названия колонок.
 - Отвечай на языке пользователя (русский, казахский или английский).
 - Суммы в тенге с разделителями тысяч: 1 250 000 ₸.
 - Коротко: 3-6 предложений или список. В конце — одно конкретное действие, что сделать дальше."""
@@ -61,10 +63,47 @@ def search_transactions(category: str | None = None, city: str | None = None,
     return _j(tools.search_transactions(category, city, min_amount, limit))
 
 
+@function_tool
+def dataset_info() -> str:
+    """Что за данные сейчас загружены: имя файла, число строк, список колонок с типами и примерами значений.
+    Вызывай первым, если не уверен в структуре данных."""
+    return _j(dataset.info())
+
+
+@function_tool
+def query_data(where: str | None = None, group_by: str | None = None, value_column: str | None = None,
+               agg: str = "sum", order_desc: bool = True, limit: int = 20) -> str:
+    """Универсальный запрос к активным данным: фильтр, группировка, агрегат. Работает с любым датасетом.
+
+    Args:
+        where: Условие в синтаксисе pandas, например `amount_kzt > 100000 and city == "Алматы"`.
+        group_by: Колонка для группировки.
+        value_column: Числовая колонка для агрегата. Без неё считается количество строк.
+        agg: sum, mean, count, min, max, median или nunique.
+        order_desc: Сортировать по убыванию.
+        limit: Сколько строк вернуть.
+    """
+    return _j(dataset.query(where, group_by, value_column, agg, order_desc, limit))
+
+
+@function_tool
+def find_outliers(value_column: str, group_column: str | None = None, z: float = 3.0, limit: int = 10) -> str:
+    """Выбросы в любой числовой колонке по z-score. Работает с любым датасетом.
+
+    Args:
+        value_column: Числовая колонка, например сумма.
+        group_column: Считать отклонение внутри группы, например по клиенту.
+        z: Порог, обычно 2.5-4.
+        limit: Сколько вернуть.
+    """
+    return _j(dataset.outliers(value_column, group_column, z, limit))
+
+
 agent = Agent(
     name="FinAnalyst",
     instructions=INSTRUCTIONS,
-    tools=[get_summary, find_anomalies, client_profile, search_transactions],
+    tools=[get_summary, find_anomalies, client_profile, search_transactions,
+           dataset_info, query_data, find_outliers],
     model=MODEL,
 )
 

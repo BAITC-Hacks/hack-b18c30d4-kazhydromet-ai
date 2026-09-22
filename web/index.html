@@ -20,6 +20,14 @@
 
 <main class="max-w-7xl mx-auto px-4 py-6 grid gap-6 lg:grid-cols-5">
   <section class="lg:col-span-3 space-y-6">
+    <div class="bg-white rounded-xl shadow-sm px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+      <span class="font-medium">Данные:</span>
+      <span id="ds" class="text-slate-500">загружаю…</span>
+      <label class="ml-auto text-emerald-700 hover:underline cursor-pointer">
+        Загрузить CSV или Excel<input id="up" type="file" accept=".csv,.xlsx,.xls" class="hidden">
+      </label>
+      <button id="rst" class="text-slate-400 hover:text-slate-700 hover:underline">вернуть демо</button>
+    </div>
     <div id="kpis" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
     <div class="bg-white rounded-xl shadow-sm p-4">
       <h2 class="font-semibold mb-3">Траты по категориям</h2>
@@ -51,7 +59,8 @@ const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'
 const history = [];
 
 async function load() {
-  const [h, s, a] = await Promise.all(['/api/health', '/api/summary', '/api/anomalies'].map(u => fetch(u).then(r => r.json())));
+  const [h, s, a, d] = await Promise.all(['/api/health', '/api/summary', '/api/anomalies', '/api/dataset'].map(u => fetch(u).then(r => r.json())));
+  showDataset(d);
   $('#mode').textContent = h.live ? `LIVE · ${h.model}` : 'DEMO · без ключа';
   $('#mode').className = 'text-xs px-2 py-1 rounded ' + (h.live ? 'bg-emerald-600' : 'bg-amber-600');
   $('#kpis').innerHTML = [
@@ -66,6 +75,26 @@ async function load() {
   $('#anoms').innerHTML = a.map(t => `<tr class="border-t"><td class="py-1">${t.ts.slice(0, 16).replace('T', ' ')}</td><td>${t.client_id}</td>
     <td class="font-medium text-rose-600">${fmt(t.amount_kzt)} ₸</td><td>${t.city}</td><td>${t.z}</td></tr>`).join('');
 }
+
+function showDataset(d) {
+  $('#ds').innerHTML = d.error ? `<span class="text-rose-600">${esc(d.error)}</span>`
+    : `<b>${esc(d.source)}</b> · ${fmt(d.rows)} строк · ${d.columns.length} колонок: <span class="text-slate-400">${d.columns.map(c => esc(c.name)).join(', ')}</span>`;
+}
+
+$('#up').onchange = async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  $('#ds').textContent = 'загружаю ' + file.name + '…';
+  const body = new FormData();
+  body.append('file', file);
+  const r = await fetch('/api/dataset/upload', { method: 'POST', body });
+  const d = await r.json();
+  showDataset(r.ok ? d : { error: d.detail || 'не удалось прочитать файл' });
+  if (r.ok) bubble('assistant', `Загрузил <b>${esc(d.source)}</b>: ${fmt(d.rows)} строк. Спрашивай про эти данные — я вижу их колонки.`);
+  e.target.value = '';
+};
+
+$('#rst').onclick = async () => showDataset(await fetch('/api/dataset/reset', { method: 'POST' }).then(r => r.json()));
 
 function bubble(role, html) {
   const el = document.createElement('div');
