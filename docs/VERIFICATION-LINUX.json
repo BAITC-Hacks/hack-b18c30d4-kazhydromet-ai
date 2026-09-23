@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "timestamp_utc": "2026-09-23T12:27:03.091814Z",
+  "timestamp_utc": "2026-09-23T12:26:27.150736Z",
   "git_commit": "54936192aa346fb7d9049a144dec98c5db542489",
-  "workingtree_dirty_before": false,
-  "platform": "Windows-11-10.0.26200-SP0",
+  "workingtree_dirty_before": true,
+  "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
   "python": {
-    "version": "3.12.13",
+    "version": "3.12.3",
     "implementation": "CPython"
   },
   "steps": [
@@ -15,9 +15,9 @@
         "scripts/check_outputs.py"
       ],
       "exit_code": 0,
-      "elapsed_seconds": 6.547,
+      "elapsed_seconds": 4.59,
       "check_count": 21,
-      "stdout": "OK   full recompute under 300 s (4.97 s)\nOK   read generated CSVs and raw parquet (saved + fresh)\nOK   nodes_roles: 2248 rows (found 2248)\nOK   nodes_roles: unique gid\nOK   nodes_roles: gid match raw nodes\nOK   nodes_roles: required columns\nOK   nodes_roles: no empty required values\nOK   nodes_roles: roles in dictionary (invalid 0)\nOK   nodes_roles: role_score in [0,1] (invalid 0)\nOK   nodes_roles: priority_score in [0,1] (invalid 0)\nOK   nodes_roles: evidence 1..200 chars with a digit (invalid 0)\nOK   clusters: required columns\nOK   clusters: covers every node cluster_id\nOK   clusters: sum n_nodes = 2248 (found 2248)\nOK   clusters: sum n_seed = 81 (found 81)\nOK   top_nodes: at least 20 rows (found 50)\nOK   top_nodes: required columns\nOK   top_nodes: descending priority, gid breaks ties\nOK   top_nodes: gid in nodes_roles\nOK   top_nodes: consecutive rank\nOK   depth=4 with out_deg=0: no terminal role (checked 444, invalid 0)\n"
+      "stdout": "OK   full recompute under 300 s (3.92 s)\nOK   read generated CSVs and raw parquet (saved + fresh)\nOK   nodes_roles: 2248 rows (found 2248)\nOK   nodes_roles: unique gid\nOK   nodes_roles: gid match raw nodes\nOK   nodes_roles: required columns\nOK   nodes_roles: no empty required values\nOK   nodes_roles: roles in dictionary (invalid 0)\nOK   nodes_roles: role_score in [0,1] (invalid 0)\nOK   nodes_roles: priority_score in [0,1] (invalid 0)\nOK   nodes_roles: evidence 1..200 chars with a digit (invalid 0)\nOK   clusters: required columns\nOK   clusters: covers every node cluster_id\nOK   clusters: sum n_nodes = 2248 (found 2248)\nOK   clusters: sum n_seed = 81 (found 81)\nOK   top_nodes: at least 20 rows (found 50)\nOK   top_nodes: required columns\nOK   top_nodes: descending priority, gid breaks ties\nOK   top_nodes: gid in nodes_roles\nOK   top_nodes: consecutive rank\nOK   depth=4 with out_deg=0: no terminal role (checked 444, invalid 0)\n"
     },
     {
       "command": [
@@ -27,7 +27,7 @@
         "8013"
       ],
       "exit_code": 0,
-      "elapsed_seconds": 5.812,
+      "elapsed_seconds": 5.442,
       "check_count": 24,
       "stdout": "OK   health: ready, mock provider, public demo\nOK   static /: HTTP 200\nOK   static /graph.html: HTTP 200\nOK   static /vendor/tailwind.js: HTTP 200\nOK   static /vendor/vis-network.min.js: HTTP 200\nOK   overview: 2248 nodes and 81 seeds\nOK   graph: 2248 string gids and 3119 directed edges\nOK   top: 20 clients in descending priority\nOK   control card: 19 payers, 61 receivers, evidence and gaps\nOK   fourth hop remains truncated, not terminal\nOK   timeline: 31 days, monthly sums match card\nOK   review coverage: union of transfers, no double counting\nOK   report: Markdown attachment with exactly selected cards\nOK   unknown gid: report remains readable\nOK   unknown gid: node returns 404\nOK   unknown gid: timeline returns 404\nOK   report preview: HTML with selected gids\nOK   chat: HTTP 200, mock answer grounded in node_card\nOK   chat context: selected client and day reach daily_transfers\nOK   chat context: selected review list reaches review_scope\nOK   chat context: 19-digit gid rejected with HTTP 422\nOK   public demo: POST /api/recompute is blocked\nOK   public demo: POST /api/dataset/upload is blocked\nOK   public demo: POST /api/dataset/reset is blocked\nPASS 24 checks; no API key or external model used\nSTOPPED own test server on 127.0.0.1:8013\n"
     }
@@ -36,11 +36,11 @@
     "data/raw/nodes.parquet": "d2a45b0df6e9352832d5fb09839d10b9e23f898156c3bab263b051b31cc0296d",
     "data/raw/edges.parquet": "4e71dde5cd3115bcb26e91202665532ee6581cf8233a9fc8059ea59fb7358a38",
     "data/raw/transactions.parquet": "c30c5317b5439591dde86f2058dc47a3d19b2900c055ded994fe547f6fb7e7da",
-    "out/nodes_roles.csv": "714d14481dd290e9d0f4e2b0913068722a55ef075c7628606ac21f4b0468e098",
-    "out/clusters.csv": "af9ecf22c2268563fb53042e30fa37c03dd40d7532b02df1f24765cf1fb57bc1",
-    "out/top_nodes.csv": "df2febba32f9e0793566aa00f7bc5c595ffe973c95a799f0b97ec93050e90e5e",
+    "out/nodes_roles.csv": "d96a8f0065c805b9aac4a3eacfb9dc25d202d024293b8f11b5633f645c491679",
+    "out/clusters.csv": "66a5a4120b82fa2ad16ddbc637bd022066bd269577376d20b9913bf797fc8b63",
+    "out/top_nodes.csv": "f1bc8d712fc2b80f15f8ff40c5c67d2d8217d931b18c6b2c380cfae387e63c7a",
     "out/graph.json": "6233407c87946548df45361eccf352023c7ce9ff7e78b98daf7096c9b58d7943",
-    "out/summary.json": "2ed087dbdef47bbda8ed145b46a978dd55f43ddde5e34ddf0b2f6f5e52be7b77"
+    "out/summary.json": "15a754df5196adb6d5f6fb0af969e7b3af42e1b48e6435aee8d68cd20eae97e2"
   },
   "overall_passed": true
 }

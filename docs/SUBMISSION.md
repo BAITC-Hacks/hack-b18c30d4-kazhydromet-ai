@@ -45,6 +45,10 @@ vis-network. Разработка с Codex и Claude Code; новые завис
 docs/JURY-CHECK.md — маршрут проверки; scripts/check_outputs.py — 21 проверка выгрузок;
 scripts/smoke_api.py — проверка HTTP API без ключей с отдельным локальным сервером.
 
+Полная проверка одной командой: `scripts/verify.py`. На Windows и Linux прошли
+21 + 24 проверки; три CSV и graph.json совпали побайтно. Реальные JSON-отчёты
+и SHA-256 сохранены в docs/VERIFICATION-WINDOWS.json, VERIFICATION-LINUX.json и REPRODUCIBILITY.json.
+
 ## Перед нажатием финальной кнопки
 
 1. Убедиться, что последние коммиты отправлены в командный репозиторий.

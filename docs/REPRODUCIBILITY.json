@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "git_commit": "54936192aa346fb7d9049a144dec98c5db542489",
+  "windows_report": "VERIFICATION-WINDOWS.json",
+  "linux_report": "VERIFICATION-LINUX.json",
+  "files": {
+    "data/raw/nodes.parquet": {
+      "sha256_equal": true,
+      "equal_after_newline_normalization": true
+    },
+    "data/raw/edges.parquet": {
+      "sha256_equal": true,
+      "equal_after_newline_normalization": true
+    },
+    "data/raw/transactions.parquet": {
+      "sha256_equal": true,
+      "equal_after_newline_normalization": true
+    },
+    "out/nodes_roles.csv": {
+      "sha256_equal": true,
+      "equal_after_newline_normalization": true
+    },
+    "out/clusters.csv": {
+      "sha256_equal": true,
+      "equal_after_newline_normalization": true
+    },
+    "out/top_nodes.csv": {
+      "sha256_equal": true,
+      "equal_after_newline_normalization": true
+    },
+    "out/graph.json": {
+      "sha256_equal": true,
+      "equal_after_newline_normalization": true
+    },
+    "out/summary.json": {
+      "sha256_equal": false,
+      "equal_after_newline_normalization": false,
+      "different_fields": {
+        "seconds": {
+          "baseline": 4.0,
+          "linux": 4.1
+        }
+      }
+    }
+  }
+}

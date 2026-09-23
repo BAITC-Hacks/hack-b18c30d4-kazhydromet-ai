@@ -69,6 +69,11 @@ Codex и Claude Code использовались как AI-агенты раз�
 `overall_passed: true` означает успешное выполнение этих проверок; это не оценка точности ролей.
 На macOS/Linux команда: `.venv/bin/python scripts/verify.py`. Порт можно изменить через `--port`.
 
+Сохранённые результаты версии `5493619`: [Windows](docs/VERIFICATION-WINDOWS.json),
+[Linux / WSL2](docs/VERIFICATION-LINUX.json), [сравнение файлов](docs/REPRODUCIBILITY.json).
+На обеих системах прошли 21 + 24 проверки; три CSV и `graph.json` совпали побайтно.
+В `summary.json` отличается только замер времени: 4,0 с на Windows и 4,1 с на Linux.
+
 Только выгрузки:
 
 ```powershell
