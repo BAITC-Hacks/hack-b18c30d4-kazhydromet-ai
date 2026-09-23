@@ -1,16 +1,31 @@
 """AI-агент на OpenAI Agents SDK. Новый инструмент = функция в tools.py + обёртка @function_tool здесь."""
+import asyncio
 import json
 import os
 
-from agents import Agent, Runner, function_tool
+from agents import Agent, ModelSettings, Runner, function_tool, set_tracing_disabled
+from openai.types.shared import Reasoning
 
 from . import dataset, tools
 
 MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 
-INSTRUCTIONS = """Ты — AI-помощник по финансовым госуслугам Казахстана: налоги, пошлины, штрафы,
-пособия и субсидии. Помогаешь сотруднику госоргана проверять начисления и выплаты, а гражданину —
-понимать, что ему начислено или положено.
+# Трейсинг в облако OpenAI на демо не нужен и добавляет задержку
+set_tracing_disabled(True)
+
+
+def _settings() -> ModelSettings:
+    """tool_choice=required заставляет агента сходить в данные, а не отвечать по общим соображениям.
+    После первого вызова инструмента SDK сам сбрасывает его в auto, поэтому зацикливания не будет."""
+    kw = {"tool_choice": "required"}
+    if MODEL.startswith(("gpt-5", "o1", "o3", "o4")):
+        kw["reasoning"] = Reasoning(effort="low")  # на сцене скорость важнее глубины
+    return ModelSettings(**kw)
+
+INSTRUCTIONS = """Ты — AI-аналитик финансовых данных в Казахстане. Находишь проблемные записи,
+объясняешь их человеку простым языком и предлагаешь конкретное действие.
+Данные могут быть любыми финансовыми: транзакции и клиенты банка, начисления и выплаты, заявки,
+платежи. Не предполагай структуру — узнавай её через dataset_info и работай с тем, что реально есть.
 Правила:
 - Любые цифры бери только из инструментов, ничего не выдумывай.
 - Если вопрос про загруженные данные или ты не знаешь, какие колонки есть, — СНАЧАЛА вызови dataset_info,
@@ -118,6 +133,7 @@ agent = Agent(
     tools=[get_summary, find_anomalies, citizen_profile, search_payments, refusal_rates,
            dataset_info, query_data, find_outliers],
     model=MODEL,
+    model_settings=_settings(),
 )
 
 
@@ -139,11 +155,17 @@ def _mock(error: str | None = None) -> dict:
 async def ask(messages: list[dict]) -> dict:
     if not os.getenv("OPENAI_API_KEY"):
         return _mock()
-    try:
-        result = await Runner.run(agent, messages, max_turns=8)
-    except Exception as e:  # сеть/лимиты/модель — демо должно жить
-        return _mock(f"{type(e).__name__}: {e}")
-    trace = [{"tool": getattr(i.raw_item, "name", type(i.raw_item).__name__),
-              "args": getattr(i.raw_item, "arguments", "")}
-             for i in result.new_items if i.type == "tool_call_item"]
-    return {"reply": str(result.final_output), "trace": trace, "mode": "live"}
+    last = None
+    for attempt in range(3):  # сбои API на площадке частые; повтор спасает демо от фолбэка
+        try:
+            result = await Runner.run(agent, messages, max_turns=8)
+        except Exception as e:
+            last = e
+            if attempt < 2:
+                await asyncio.sleep(0.6 * (attempt + 1))
+            continue
+        trace = [{"tool": getattr(i.raw_item, "name", type(i.raw_item).__name__),
+                  "args": getattr(i.raw_item, "arguments", "")}
+                 for i in result.new_items if i.type == "tool_call_item"]
+        return {"reply": str(result.final_output), "trace": trace, "mode": "live"}
+    return _mock(f"{type(last).__name__}: {last}")  # сеть/лимиты/модель — демо должно жить
