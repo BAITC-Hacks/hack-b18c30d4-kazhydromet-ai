@@ -1,0 +1,41 @@
+{
+ "nodes": 2248,
+ "edges": 3119,
+ "clusters": 72,
+ "roles": {
+  "peripheral": 1253,
+  "terminal": 401,
+  "transit": 367,
+  "consolidator": 161,
+  "distributor": 49,
+  "coordinator": 17
+ },
+ "truncated": 444,
+ "resilience": [
+  {
+   "removed_top": 0,
+   "largest_component": 1877,
+   "largest_share": 1.0,
+   "fragments": 16
+  },
+  {
+   "removed_top": 5,
+   "largest_component": 1670,
+   "largest_share": 0.89,
+   "fragments": 59
+  },
+  {
+   "removed_top": 10,
+   "largest_component": 1533,
+   "largest_share": 0.817,
+   "fragments": 89
+  },
+  {
+   "removed_top": 20,
+   "largest_component": 1452,
+   "largest_share": 0.774,
+   "fragments": 103
+  }
+ ],
+ "seconds": 3.8
+}
