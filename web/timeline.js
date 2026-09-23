@@ -27,6 +27,7 @@
     el('timelineToggle').classList.toggle('active', value);
     el('timelineToggle').setAttribute('aria-pressed', String(value));
     el('timelineToggle').textContent = value ? 'Весь период' : 'Потоки по дням';
+    window.dispatchEvent(new Event('aml:timeline-mode'));
   }
 
   function close(restore = true) {
@@ -74,6 +75,7 @@
       ? 'Синие стрелки — входящие, зелёные — исходящие. Бледные узлы — связи в другие дни.'
       : 'В этот день видимых переводов нет. Связи за другие дни показаны бледным цветом.';
     document.querySelectorAll('.day-column').forEach((bar, i) => bar.classList.toggle('selected', i === index));
+    window.dispatchEvent(new Event('aml:day'));
     if (!state.network || !state.graphReady || state.view !== 'neighborhood') return;
 
     const ids = new Set([data.gid]);
@@ -82,16 +84,16 @@
     const patches = nodes.getIds().map(id => {
       const original = graphNode(state.nodeMap.get(id));
       if (ids.has(id)) return original;
-      return {...original, color: {background: '#e7ecdf', border: '#d5ddcd',
-        highlight: {background: '#e7ecdf', border: '#9bb48a'}}, borderWidth: 1,
-        font: {...original.font, color: '#a9b5a0'}};
+      return {...original, color: {background: '#263845', border: '#334956',
+        highlight: {background: '#263845', border: '#607d8d'}}, borderWidth: 1,
+        font: {...original.font, color: '#687f8e'}};
     });
     nodes.update(patches);
     const edges = state.network.body.data.edges;
     edges.clear();
     edges.add(day.edges.map(edge => ({...graphEdge(edge),
-      color: {color: edge.to === data.gid ? '#3e7898' : '#2c855c',
-        highlight: edge.to === data.gid ? '#3e7898' : '#2c855c', opacity: .95},
+      color: {color: edge.to === data.gid ? '#70c9f4' : '#53dcbb',
+        highlight: edge.to === data.gid ? '#70c9f4' : '#53dcbb', opacity: .95},
       width: Math.max(1.6, Math.log10(Math.max(1, edge.sum_kzt)) - 2.8)})));
     state.network.selectNodes([data.gid], false);
     state.network.redraw();

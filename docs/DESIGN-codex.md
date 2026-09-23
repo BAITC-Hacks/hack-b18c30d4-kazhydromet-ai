@@ -36,6 +36,11 @@
 - Роли, THRESHOLDS и формула приоритета в этой части не менялись; новых зависимостей нет.
 
 ## Артефакты и остаток
+- Финальная полировка: `web/terminal.css`, направленное представление `web/flows.js` и `flows.css`; старый граф сохранён, справка и цвета согласованы с выбранным режимом.
+- Потоки: 13/13 проверок Chrome, включая все 31 день; 36/36 независимых проверок 1280×800 и 390×844. Чужие данные после ошибки не остаются; 7/7 регрессионных проверок QA.
+- NVIDIA: исправлены ошибка старта при неверном URL, пустая модель, неявное расходование OpenAI; 8 конфигурационных проверок и тестовый проход SDK с инструментом. Настоящего NVIDIA-запроса не было.
+- `PUBLIC_DEMO`: 11/11 ASGI-проверок ограничений, отчёта и fallback; локальное поведение сохранено. Общий адрес и Linux-сборка ещё не проверены.
+- Финальный gate `terminal-release`: pipeline 3,9 с; валидатор 21/21 OK, 4,14 с; health и прежние API HTTP 200. Живой OpenAI: 8,48 с, HTTP 200, `mode=live`, `node_card`.
 - Снимки: `docs/screenshots/main.png`, `coordinator.png`, `anomaly.png`, `truncated.png`, `routes.png`, `review-list.png`, `timeline.png`.
 - Полный реальный вывод валидатора: `tmp/review-codex-2/timeline-release-validator.txt` (21 строка OK, exit 0).
 - Логи Chrome: `tmp/review-codex-2/product`, `chat-product`, `design-qa`, `timeline`; локальные тестовые файлы не коммитятся.
