@@ -3,3 +3,6 @@
 __pycache__/
 *.pyc
 .DS_Store
+
+# case raw downloads (canonical copies in data/raw, docs/case)
+data/case/

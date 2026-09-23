@@ -6,3 +6,5 @@ openai-agents
 pandas
 openpyxl
 python-dotenv
+networkx
+pyarrow
