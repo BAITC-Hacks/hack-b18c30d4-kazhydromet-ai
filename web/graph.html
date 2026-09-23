@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Граф денег — AML-аналитика сети переводов</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/standalone/umd/vis-network.min.js"></script>
+<style>
+  body { font-size: 15px; }
+  #net { height: 640px; }
+  .gid { font-family: ui-monospace, monospace; cursor: pointer; color: #1d4ed8; }
+  .gid:hover { text-decoration: underline; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 9999px; color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .tab.on { background: #0f172a; color: #fff; }
+  .scroll { max-height: 520px; overflow-y: auto; }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen">
+<header class="bg-slate-900 text-white">
+  <div class="max-w-[1600px] mx-auto px-4 py-3 flex flex-wrap items-center gap-4">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-rose-600 grid place-items-center font-bold text-lg">₸</div>
+      <div><div class="font-semibold text-lg">Граф денег</div>
+        <div class="text-xs text-slate-400">восстановление структуры сети по переводам · выводы — гипотезы для проверки</div></div>
+    </div>
+    <div id="kpis" class="flex flex-wrap gap-2 text-sm"></div>
+    <div class="ml-auto flex items-center gap-2">
+      <a href="/api/report?top=20" class="text-sm px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500">Перечень на проверку (.md)</a>
+      <button id="recompute" class="text-sm px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600">Пересчитать</button>
+      <span id="mode" class="text-xs px-2 py-1 rounded bg-slate-700">…</span>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-[1600px] mx-auto p-4 grid gap-4 xl:grid-cols-12">
+  <!-- топ-лист -->
+  <section class="xl:col-span-3 bg-white rounded-xl shadow-sm p-3">
+    <div class="flex items-center justify-between mb-2">
+      <h2 class="font-semibold">Кого проверять первым</h2>
+      <select id="roleFilter" class="text-sm border rounded px-1 py-0.5">
+        <option value="">все роли</option>
+      </select>
+    </div>
+    <div id="top" class="scroll divide-y text-sm"><div class="text-slate-400 py-4">загружаю…</div></div>
+    <div id="resil" class="mt-3 text-xs text-slate-600 bg-slate-50 rounded p-2"></div>
+  </section>
+
+  <!-- схема -->
+  <section class="xl:col-span-6 bg-white rounded-xl shadow-sm p-3">
+    <div class="flex flex-wrap items-center gap-2 mb-2">
+      <input id="search" placeholder="Поиск по gid (можно последние цифры)" class="border rounded px-2 py-1 text-sm w-72 font-mono">
+      <button id="go" class="text-sm px-3 py-1 rounded bg-slate-900 text-white">Найти</button>
+      <div class="flex rounded border overflow-hidden text-sm">
+        <button class="tab px-2 py-1 on" data-view="top">Топ-150</button>
+        <button class="tab px-2 py-1" data-view="all">Вся сеть</button>
+      </div>
+      <div class="flex rounded border overflow-hidden text-sm">
+        <button class="tab px-2 py-1 on" data-color="role">Цвет: роль</button>
+        <button class="tab px-2 py-1" data-color="cluster">кластер</button>
+      </div>
+      <span id="viewInfo" class="text-xs text-slate-500"></span>
+    </div>
+    <div id="net" class="border rounded bg-slate-50 relative"><div id="netMsg" class="absolute inset-0 grid place-items-center text-slate-400">загружаю граф…</div></div>
+    <div id="legend" class="flex flex-wrap gap-3 mt-2 text-xs text-slate-600"></div>
+  </section>
+
+  <!-- карточка -->
+  <section class="xl:col-span-3 bg-white rounded-xl shadow-sm p-3">
+    <h2 class="font-semibold mb-2">Карточка узла</h2>
+    <div id="card" class="text-sm scroll"><div class="text-slate-400">Выберите узел в топе, на схеме или найдите по gid.</div></div>
+  </section>
+
+  <!-- кластеры -->
+  <section class="xl:col-span-7 bg-white rounded-xl shadow-sm p-3">
+    <h2 class="font-semibold mb-2">Кластеры <span class="text-xs font-normal text-slate-500">(Louvain на неориентированной проекции; клик — показать на схеме)</span></h2>
+    <div class="scroll" style="max-height:360px">
+      <table class="w-full text-sm"><thead class="text-left text-slate-500 sticky top-0 bg-white"><tr>
+        <th class="py-1 pr-2">#</th><th class="pr-2">узлов</th><th class="pr-2">seed</th><th class="pr-2">оборот внутри</th><th>гипотеза</th></tr></thead>
+        <tbody id="clusters"></tbody></table>
+    </div>
+  </section>
+
+  <!-- чат -->
+  <section class="xl:col-span-5 bg-white rounded-xl shadow-sm p-3 flex flex-col">
+    <h2 class="font-semibold mb-2">AI-ассистент аналитика</h2>
+    <div id="chat" class="flex-1 scroll space-y-3 text-sm mb-2" style="max-height:300px"></div>
+    <div id="hints" class="flex flex-wrap gap-2 mb-2"></div>
+    <form id="chatForm" class="flex gap-2">
+      <input id="q" class="flex-1 border rounded px-2 py-1.5 text-sm" placeholder="Спросите про сеть или конкретный gid…">
+      <button class="px-3 py-1.5 rounded bg-slate-900 text-white text-sm">Спросить</button>
+    </form>
+  </section>
+</main>
+
+<script>
+const ROLES = {
+  coordinator:  {ru: "координатор",        c: "#dc2626"},
+  consolidator: {ru: "точка консолидации", c: "#ea580c"},
+  distributor:  {ru: "распределитель",     c: "#9333ea"},
+  transit:      {ru: "транзит",            c: "#2563eb"},
+  terminal:     {ru: "конечный получатель", c: "#16a34a"},
+  peripheral:   {ru: "периферия",          c: "#9ca3af"},
+};
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const kzt = x => Math.round(x).toLocaleString("ru-RU") + " ₸";
+const badge = r => `<span class="badge" style="background:${ROLES[r].c}">${ROLES[r].ru}</span>`;
+const gidLink = g => `<span class="gid" data-gid="${g}">${g}</span>`;
+const clusterColor = id => id === 0 ? "#64748b" : `hsl(${(id * 137.5) % 360} 65% 50%)`;
+async function api(url, opt) {
+  const r = await fetch(url, opt);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.json();
+}
+
+// ---------- граф
+let G = null, byId = {}, outAdj = {}, inAdj = {}, net = null, colorBy = "role", view = "top", selected = null;
+
+function nodeStyle(n) {
+  const base = colorBy === "role" ? ROLES[n.role].c : clusterColor(n.cluster);
+  const border = n.is_seed ? "#000" : n.in_core ? "#d4a017" : base;
+  return {
+    id: n.id, label: n.priority > 0.75 || n.id === selected ? n.label : undefined,
+    title: `${n.id}\n${ROLES[n.role].ru} · приоритет ${n.priority.toFixed(2)}\n${n.evidence}`,
+    size: 6 + 26 * n.priority, shape: "dot",
+    color: {background: base, border, highlight: {background: base, border: "#111"}},
+    borderWidth: n.is_seed || n.in_core ? 3 : 1,
+    shapeProperties: {borderDashes: n.truncated ? [4, 3] : false},
+    font: {size: 12, face: "ui-monospace", background: "rgba(255,255,255,.8)"},
+  };
+}
+function edgeStyle(e) {
+  return {from: e.from, to: e.to, arrows: "to", width: Math.max(0.5, Math.log10(e.sum_kzt) - 3.3),
+          color: {color: "#94a3b8", highlight: "#0f172a", opacity: 0.7},
+          title: `${kzt(e.sum_kzt)} · переводов: ${e.n_tx}`};
+}
+function render(ids, physicsAll = false) {
+  const set = new Set(ids);
+  const nodes = [...set].map(id => nodeStyle(byId[id]));
+  const edges = G.edges.filter(e => set.has(e.from) && set.has(e.to)).map(edgeStyle);
+  $("#netMsg").style.display = "none";
+  const data = {nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges)};
+  const options = {
+    interaction: {hover: true, tooltipDelay: 120},
+    layout: {improvedLayout: false},
+    physics: {solver: "forceAtlas2Based", stabilization: {iterations: physicsAll ? 150 : 250},
+              forceAtlas2Based: {gravitationalConstant: -40, springLength: 70}},
+    edges: {smooth: {type: "continuous"}},
+  };
+  if (!net) {
+    net = new vis.Network($("#net"), data, options);
+    net.on("click", p => { if (p.nodes.length) openNode(p.nodes[0], false); });
+  } else { net.setOptions(options); net.setData(data); }
+  net.once("stabilizationIterationsDone", () => {
+    net.setOptions({physics: false});
+    if (selected && set.has(selected)) { net.selectNodes([selected]); net.focus(selected, {scale: 1.1, animation: true}); }
+  });
+  $("#viewInfo").textContent = `на схеме: ${nodes.length} узлов, ${edges.length} связей`;
+}
+function topIds(n) { return [...G.nodes].sort((a, b) => b.priority - a.priority).slice(0, n).map(x => x.id); }
+function ego(id, hops = 2, cap = 260) {
+  const seen = new Map([[id, 0]]); let frontier = [id];
+  for (let h = 1; h <= hops; h++) {
+    const next = [];
+    for (const v of frontier) for (const w of [...(outAdj[v] || []), ...(inAdj[v] || [])])
+      if (!seen.has(w)) { seen.set(w, h); next.push(w); }
+    frontier = next;
+  }
+  // ближние всегда, дальние — по приоритету
+  return [...seen.keys()].sort((a, b) => seen.get(a) - seen.get(b) || byId[b].priority - byId[a].priority).slice(0, cap);
+}
+function showView(v) {
+  view = v;
+  document.querySelectorAll("[data-view]").forEach(b => b.classList.toggle("on", b.dataset.view === v));
+  if (v === "top") render(topIds(150));
+  if (v === "all") render(G.nodes.map(n => n.id), true);
+}
+function showCluster(id) {
+  const ids = G.nodes.filter(n => n.cluster === id).sort((a, b) => b.priority - a.priority).slice(0, 400).map(n => n.id);
+  render(ids);
+  $("#viewInfo").textContent += ` · кластер ${id}`;
+}
+function legend() {
+  $("#legend").innerHTML = (colorBy === "role"
+    ? Object.values(ROLES).map(r => `<span class="flex items-center gap-1"><i class="w-3 h-3 rounded-full inline-block" style="background:${r.c}"></i>${r.ru}</span>`).join("")
+    : "<span>цвет = номер кластера</span>")
+    + `<span>● чёрная рамка — seed</span><span>● золотая — кольцо возвратных потоков</span><span>┅ пунктир — обрыв на 4-м колене</span><span>размер — приоритет · стрелка — направление денег</span>`;
+}
+
+// ---------- карточка
+async function openNode(gid, redraw = true) {
+  gid = String(gid).trim();
+  if (!byId[gid]) {
+    const m = G.nodes.filter(n => n.id.endsWith(gid));
+    if (m.length === 1) gid = m[0].id;
+    else { $("#card").innerHTML = `<div class="text-rose-600">gid ${esc(gid)} не найден${m.length > 1 ? ` (совпадений: ${m.length}, уточните)` : ""}</div>`; return; }
+  }
+  selected = gid;
+  history.replaceState(null, "", "#" + gid);
+  if (redraw) render(ego(gid));
+  else if (net) net.selectNodes([gid]);
+  $("#card").innerHTML = '<div class="text-slate-400">загружаю…</div>';
+  try {
+    const c = await api(`/api/node/${gid}`);
+    const m = c.metrics;
+    const pt = m.truncated ? "неизвестно (обрыв)" : m.pass_through < 0 ? "нет входящих" : Math.round(m.pass_through * 100) + "%";
+    const rows = (list) => list.length ? list.map(x => `<tr><td class="pr-2"><span class="gid" data-gid="${x.gid}" title="${x.gid}">…${x.gid.slice(-10)}</span></td><td class="pr-2">${badge(x.role)}</td>
+        <td class="text-right whitespace-nowrap">${kzt(x.sum_kzt)}</td><td class="text-right pl-2 text-slate-500">${x.n_tx}</td></tr>`).join("")
+        : `<tr><td class="text-slate-400">нет в выгрузке</td></tr>`;
+    $("#card").innerHTML = `
+      <div class="font-mono text-base break-all">${c.gid}</div>
+      <div class="flex flex-wrap items-center gap-2 my-2">${badge(c.role)}
+        ${c.is_seed ? '<span class="badge" style="background:#000">seed</span>' : ""}
+        ${m.truncated ? '<span class="badge" style="background:#64748b">обрыв 4-го колена</span>' : ""}
+        ${m.in_core ? '<span class="badge" style="background:#b8860b">кольцо</span>' : ""}</div>
+      <div class="grid grid-cols-3 gap-2 text-center my-2">
+        <div class="bg-slate-50 rounded p-1"><div class="text-xs text-slate-500">место</div><div class="font-semibold">#${c.rank}</div></div>
+        <div class="bg-slate-50 rounded p-1"><div class="text-xs text-slate-500">приоритет</div><div class="font-semibold">${c.priority_score.toFixed(2)}</div></div>
+        <div class="bg-slate-50 rounded p-1"><div class="text-xs text-slate-500">сила правила</div><div class="font-semibold">${c.role_score.toFixed(2)}</div></div></div>
+      <div class="bg-amber-50 border-l-4 border-amber-400 p-2 my-2"><b>Почему:</b> ${esc(c.evidence)}</div>
+      <div class="grid grid-cols-2 gap-x-3 text-xs my-2">
+        <div>получил от: <b>${m.in_deg}</b> плательщ.</div><div>отправил: <b>${m.out_deg}</b> получ.</div>
+        <div>вход: <b>${kzt(m.in_kzt)}</b></div><div>выход: <b>${kzt(m.out_kzt)}</b></div>
+        <div>отдал дальше: <b>${pt}</b></div><div>ушло за ≤2 дня: <b>${Math.round(m.fast_share * 100)}%</b></div>
+        <div>seed в 2 шагах выше: <b>${m.seeds_2hop}</b></div><div>циклов через узел: <b>${m.cycles}</b></div>
+        <div>колено: <b>${m.depth}</b></div><div>кластер: <b class="gid" data-cluster="${c.cluster_id}">${c.cluster_id}</b></div>
+        <div class="col-span-2">активность: ${c.first_date ?? "—"} — ${c.last_date ?? "—"}</div></div>
+      ${c.gaps.length ? `<div class="bg-sky-50 p-2 rounded my-2 text-xs"><b>Что запросить дальше:</b><ul class="list-disc ml-4">${c.gaps.map(g => `<li>${esc(g)}</li>`).join("")}</ul></div>` : ""}
+      <div class="font-semibold mt-3">Получил от</div><table class="w-full text-xs">${rows(c.in)}</table>
+      <div class="font-semibold mt-3">Отправил</div><table class="w-full text-xs">${rows(c.out)}</table>`;
+  } catch (e) { $("#card").innerHTML = `<div class="text-rose-600">Ошибка: ${esc(e.message)}</div>`; }
+}
+
+// ---------- топ, кластеры, сводка
+async function loadTop() {
+  const role = $("#roleFilter").value;
+  $("#top").innerHTML = '<div class="text-slate-400 py-4">загружаю…</div>';
+  try {
+    const t = await api(`/api/top?n=50${role ? "&role=" + role : ""}`);
+    $("#top").innerHTML = t.map(x => `<div class="py-2 cursor-pointer hover:bg-slate-50" data-gid="${x.gid}">
+      <div class="flex items-center gap-2"><b class="w-8 text-slate-500">#${x.rank}</b><span class="font-mono text-xs">${x.gid}</span>
+      <span class="ml-auto text-xs font-semibold">${x.priority_score.toFixed(2)}</span></div>
+      <div class="ml-8 mt-0.5">${badge(x.role)} ${x.is_seed ? '<span class="badge" style="background:#000">seed</span>' : ""}</div>
+      <div class="ml-8 text-xs text-slate-600 mt-0.5">${esc(x.evidence)}</div></div>`).join("") || '<div class="text-slate-400">пусто</div>';
+  } catch (e) { $("#top").innerHTML = `<div class="text-rose-600">Ошибка: ${esc(e.message)}</div>`; }
+}
+async function loadClusters() {
+  try {
+    const cl = await api("/api/clusters");
+    $("#clusters").innerHTML = cl.map(c => `<tr class="border-t cursor-pointer hover:bg-slate-50" data-cluster="${c.cluster_id}">
+      <td class="py-1 pr-2"><i class="w-3 h-3 rounded-full inline-block align-middle" style="background:${clusterColor(c.cluster_id)}"></i> ${c.cluster_id}</td>
+      <td class="pr-2">${c.n_nodes}</td><td class="pr-2">${c.n_seed}</td><td class="pr-2 whitespace-nowrap">${kzt(c.sum_kzt_internal)}</td>
+      <td class="text-xs text-slate-600">${esc(c.hypothesis)}</td></tr>`).join("");
+  } catch (e) { $("#clusters").innerHTML = `<tr><td class="text-rose-600">Ошибка: ${esc(e.message)}</td></tr>`; }
+}
+async function loadOverview() {
+  try {
+    const o = await api("/api/overview");
+    const k = (l, v) => `<span class="bg-slate-800 rounded px-2 py-1"><span class="text-slate-400">${l}</span> <b>${v}</b></span>`;
+    $("#kpis").innerHTML = k("клиентов", o.nodes.toLocaleString("ru-RU")) + k("seed", o.seeds) + k("связей", o.edges.toLocaleString("ru-RU"))
+      + k("оборот", kzt(o.turnover_kzt)) + k("кластеров", o.clusters) + k("координаторов", o.roles.coordinator || 0)
+      + k("обрыв 4-го колена", o.truncated);
+    const r = o.resilience;
+    $("#resil").innerHTML = "<b>Устойчивость сети</b> — если изъять узлы с верха списка:<br>" + r.map(x =>
+      `топ-${x.removed_top}: крупнейший фрагмент ${Math.round(x.largest_share * 100)}% (${x.largest_component} узлов), фрагментов ${x.fragments}`).join("<br>");
+  } catch (e) { $("#kpis").innerHTML = `<span class="text-rose-300">сводка недоступна: ${esc(e.message)}</span>`; }
+}
+
+// ---------- чат
+const HINTS = ["Кого проверять первым?", "Почему 100000008603629100 координатор?",
+  "Кто собирает деньги с этих пятерых: 100000003684369100, 100000006866783100, 100000003016635100, 100000000343175100, 100000002527114100?"];
+let chatLog = [];
+const linkify = t => esc(t).replace(/\b\d{18}\b/g, g => byId[g] ? gidLink(g) : g).replace(/\n/g, "<br>");
+async function ask(text) {
+  chatLog.push({role: "user", content: text});
+  $("#chat").insertAdjacentHTML("beforeend", `<div class="bg-slate-100 rounded p-2 ml-8">${esc(text)}</div>`);
+  const wait = document.createElement("div"); wait.className = "text-slate-400"; wait.textContent = "агент работает с графом…";
+  $("#chat").append(wait); $("#chat").scrollTop = 1e9;
+  try {
+    const r = await api("/api/chat", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({messages: chatLog})});
+    chatLog.push({role: "assistant", content: r.reply});
+    wait.outerHTML = `<div class="border-l-4 ${r.mode === "live" ? "border-emerald-500" : "border-amber-400"} pl-2">
+      <div>${linkify(r.reply)}</div>
+      <div class="text-xs text-slate-400 mt-1">${r.mode === "live" ? "live" : "демо-режим"} · инструменты: ${r.trace.map(t => esc(t.tool)).join(", ") || "—"}</div></div>`;
+    $("#mode").textContent = r.mode === "live" ? "LLM: live" : "LLM: демо-режим";
+  } catch (e) { wait.outerHTML = `<div class="text-rose-600">Ассистент недоступен: ${esc(e.message)}. Остальной экран работает.</div>`; chatLog.pop(); }
+  $("#chat").scrollTop = 1e9;
+}
+
+// ---------- события
+document.addEventListener("click", e => {
+  const g = e.target.closest("[data-gid]"); if (g) return openNode(g.dataset.gid);
+  const c = e.target.closest("[data-cluster]"); if (c && G) return showCluster(+c.dataset.cluster);
+  const v = e.target.closest("[data-view]"); if (v && G) return showView(v.dataset.view);
+  const col = e.target.closest("[data-color]");
+  if (col && G) {
+    colorBy = col.dataset.color;
+    document.querySelectorAll("[data-color]").forEach(b => b.classList.toggle("on", b === col));
+    legend(); if (net) { const ids = net.body.data.nodes.getIds(); net.body.data.nodes.update(ids.map(id => nodeStyle(byId[id]))); }
+  }
+});
+$("#go").onclick = () => openNode($("#search").value);
+$("#search").onkeydown = e => { if (e.key === "Enter") openNode($("#search").value); };
+$("#roleFilter").onchange = loadTop;
+$("#chatForm").onsubmit = e => { e.preventDefault(); const q = $("#q").value.trim(); if (q) { $("#q").value = ""; ask(q); } };
+$("#recompute").onclick = async () => {
+  const b = $("#recompute"); b.disabled = true; b.textContent = "Пересчёт…";
+  try { const s = await api("/api/recompute", {method: "POST"}); b.textContent = `Готово за ${s.seconds} с`; await init(); }
+  catch (e) { b.textContent = "Ошибка пересчёта"; }
+  setTimeout(() => { b.disabled = false; b.textContent = "Пересчитать"; }, 3000);
+};
+$("#hints").innerHTML = HINTS.map(h => `<button class="text-xs border rounded-full px-2 py-1 hover:bg-slate-100 text-left">${esc(h.length > 60 ? h.slice(0, 57) + "…" : h)}</button>`).join("");
+[...$("#hints").children].forEach((b, i) => b.onclick = () => ask(HINTS[i]));
+Object.entries(ROLES).forEach(([k, r]) => $("#roleFilter").insertAdjacentHTML("beforeend", `<option value="${k}">${r.ru}</option>`));
+
+async function init() {
+  legend(); loadOverview(); loadTop(); loadClusters();
+  api("/api/health").then(h => $("#mode").textContent = h.live ? `LLM: ${h.model}` : "LLM: демо-режим").catch(() => {});
+  try {
+    G = await api("/api/graph");
+    byId = {}; outAdj = {}; inAdj = {};
+    G.nodes.forEach(n => byId[n.id] = n);
+    G.edges.forEach(e => { (outAdj[e.from] ||= []).push(e.to); (inAdj[e.to] ||= []).push(e.from); });
+    if (typeof vis === "undefined") throw new Error("библиотека vis-network не загрузилась (нет интернета?)");
+    const h = decodeURIComponent(location.hash.slice(1));
+    if (h && !selected) openNode(h); else selected ? render(ego(selected)) : showView("top");
+  } catch (e) { $("#netMsg").textContent = "Схема недоступна: " + e.message; }
+}
+init();
+</script>
+</body>
+</html>
