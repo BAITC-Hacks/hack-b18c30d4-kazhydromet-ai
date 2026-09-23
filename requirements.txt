@@ -8,3 +8,4 @@ openpyxl
 python-dotenv
 networkx
 pyarrow
+scipy
