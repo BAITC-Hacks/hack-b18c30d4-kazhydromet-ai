@@ -61,7 +61,10 @@
       </div>
       <span id="viewInfo" class="text-xs text-slate-500"></span>
     </div>
-    <div id="net" class="border rounded bg-slate-50 relative"><div id="netMsg" class="absolute inset-0 grid place-items-center text-slate-400">загружаю граф…</div></div>
+    <div class="relative">
+      <div id="net" class="border rounded bg-slate-50"></div>
+      <div id="netMsg" class="absolute inset-0 grid place-items-center text-slate-400 pointer-events-none" role="status">загружаю граф…</div>
+    </div>
     <div id="legend" class="flex flex-wrap gap-3 mt-2 text-xs text-slate-600"></div>
   </section>
 
@@ -326,7 +329,7 @@ async function init() {
     if (typeof vis === "undefined") throw new Error("библиотека vis-network не загрузилась (нет интернета?)");
     const h = decodeURIComponent(location.hash.slice(1));
     if (h && !selected) openNode(h); else selected ? render(ego(selected)) : showView("top");
-  } catch (e) { $("#netMsg").textContent = "Схема недоступна: " + e.message; }
+  } catch (e) { $("#netMsg").textContent = "Схема недоступна: " + e.message; $("#netMsg").style.display = "grid"; }
 }
 init();
 </script>

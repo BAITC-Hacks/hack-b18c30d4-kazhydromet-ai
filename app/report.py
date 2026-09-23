@@ -1,6 +1,7 @@
 """Markdown report for an AML analyst's review and follow-up requests."""
 
 import argparse
+import html
 from datetime import datetime
 from pathlib import Path
 
@@ -26,7 +27,7 @@ def _score(value: float, digits: int = 4) -> str:
 
 
 def _cell(value: str) -> str:
-    return " ".join(str(value).split()).replace("|", "\\|")
+    return html.escape(" ".join(str(value).split()), quote=False).replace("|", "\\|")
 
 
 def _role(card: dict) -> str:
