@@ -30,6 +30,7 @@ def _state():
 
 def reload():
     _state.cache_clear()
+    _all_routes.cache_clear()
     return _state()[0].shape[0]
 
 
@@ -72,7 +73,32 @@ def node_card(gid, limit: int = 15) -> dict:
             "last_date": t.date.max().strftime("%d.%m.%Y") if len(t) else None,
             "in": _counterparts(g, "in", limit), "out": _counterparts(g, "out", limit)}
     card["gaps"] = gaps(r)
+    routes = repeated_routes(str(g), limit=3)
+    card["repeated_routes"] = routes["routes"]
+    card["repeated_routes_count"] = routes["total"]
+    card["repeated_routes_note"] = routes["note"]
     return card
+
+
+@lru_cache(maxsize=1)
+def _all_routes() -> list[dict]:
+    from .routes import find_routes
+    return find_routes(_state()[4])
+
+
+def repeated_routes(gid: str | None = None, limit: int = 10) -> dict:
+    """Повторяющиеся A→B→C; совпадение дат допускается, происхождение денег не устанавливается."""
+    note = ("Не менее 2 пар переводов с неубывающими датами; каждая транзакция используется "
+            "один раз внутри цепочки. Порядок в пределах дня неизвестен. Суммы между шагами "
+            "не сопоставляются: это гипотезы маршрутов, не доказательство движения тех же средств. "
+            "Разные цепочки могут включать одни и те же переводы; их суммы нельзя складывать.")
+    selected = _gid(gid) if gid is not None else None
+    if gid is not None and selected is None:
+        return {"routes": [], "total": 0, "note": note, "error": "gid не найден"}
+    rows = _all_routes()
+    if selected is not None:
+        rows = [row for row in rows if str(selected) in row["gids"]]
+    return {"routes": rows[:max(0, min(limit, 100))], "total": len(rows), "note": note}
 
 
 def gaps(r) -> list[str]:

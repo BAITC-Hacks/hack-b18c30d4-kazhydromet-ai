@@ -64,6 +64,11 @@ def path(src: str, dst: str):
     return graph.money_path(src, dst)
 
 
+@app.get("/api/routes")
+def routes(gid: str | None = None, limit: int = 10):
+    return graph.repeated_routes(gid, limit)
+
+
 @app.post("/api/recompute")
 def recompute():
     """Полный пересчёт от сырых parquet до выгрузок."""
