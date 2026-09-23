@@ -19,8 +19,8 @@ def _state():
     outputs = ("nodes_roles.csv", "clusters.csv", "top_nodes.csv", "graph.json", "summary.json")
     if any(not (OUT / name).exists() for name in outputs):
         pipeline.run(DATA, OUT)
-    df = pd.read_csv(OUT / "nodes_roles.csv").set_index("gid").sort_values(
-        "priority_score", ascending=False, kind="stable")
+    df = pd.read_csv(OUT / "nodes_roles.csv").sort_values(
+        ["priority_score", "gid"], ascending=[False, True]).set_index("gid")
     cl = pd.read_csv(OUT / "clusters.csv")
     top = pd.read_csv(OUT / "top_nodes.csv")
     edges, nodes, tx = pipeline.load(DATA)
@@ -140,7 +140,7 @@ def cluster_detail(cluster_id: int, limit: int = 15) -> dict:
     row = cl[cl.cluster_id == int(cluster_id)]
     if row.empty:
         return {"error": f"кластера {cluster_id} нет; всего кластеров {len(cl)}"}
-    members = df[df.cluster_id == int(cluster_id)].sort_values("priority_score", ascending=False)
+    members = df[df.cluster_id == int(cluster_id)].sort_values("priority_score", ascending=False, kind="stable")
     return {**row.iloc[0].to_dict(), "top_members": [_brief(g) | {"evidence": r.evidence}
                                                      for g, r in members.head(limit).iterrows()]}
 

@@ -101,8 +101,10 @@ def check_outputs(out_dir: Path, raw_nodes: pd.DataFrame, raw_edges: pd.DataFram
     check("top_nodes: at least 20 rows", len(top) >= 20, f"found {len(top)}")
     check("top_nodes: required columns", TOP_COLUMNS <= top_columns)
     priorities = [number(row.get("priority_score", "")) for row in top]
-    check("top_nodes: descending priority", all(math.isfinite(x) for x in priorities)
-           and all(a >= b for a, b in zip(priorities, priorities[1:])))
+    expected_top = sorted(nodes, key=lambda row: (-number(row.get("priority_score", "")), row.get("gid", "")))[:len(top)]
+    check("top_nodes: descending priority, gid breaks ties", all(math.isfinite(x) for x in priorities)
+           and all(a >= b for a, b in zip(priorities, priorities[1:]))
+           and [row.get("gid") for row in top] == [row.get("gid") for row in expected_top])
     check("top_nodes: gid in nodes_roles", all(row.get("gid", "") in gid_set for row in top))
     check("top_nodes: consecutive rank", [integer(row.get("rank", "")) for row in top]
            == list(range(1, len(top) + 1)))

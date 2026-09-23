@@ -11,9 +11,11 @@
   `out/nodes_roles.csv`, `clusters.csv`, `top_nodes.csv`, `graph.json` и `summary.json`.
 - `app/graph.py` — запросы к рассчитанному графу: карточки, список приоритетов, кластеры, пути,
   общие получатели и пробелы в данных; возвращает JSON-совместимые dict/list.
-- `app/agent.py` — OpenAI Agents SDK (`Agent`, `Runner`, `function_tool`): тонкие обёртки над `graph.py`,
+- `app/agent.py` — OpenAI Agents SDK (`Agent`, `Runner`, `function_tool`): 8 инструментов над `graph.py`, `timeline.py` и `coverage.py`,
   возвращающие `json.dumps(..., ensure_ascii=False)`. Без ключа или при сбое работает `_mock()` по графу.
 - `app/report.py` — Markdown-перечень на проверку: карточки узлов, недостающие сведения и ограничения.
+- `app/report_html.py` — печатный HTML того же отчёта; PDF сохраняется через печать браузера.
+- `app/timeline.py`, `app/coverage.py` — фактические дневные переводы и охват перечня без двойного счёта.
 - `app/timeline.py` — наблюдаемые переводы клиента по календарным дням из сырых Parquet;
   `/api/timeline/{gid}`. Роли не меняет; неизвестный порядок внутри дня явно оговорён.
 - `app/main.py` — FastAPI: `/api/*` + раздаёт `web/` как статику.
@@ -22,6 +24,7 @@
 - `web/app.css`, `web/review-list.js`, `web/timeline.css` и `web/timeline.js` — дизайн,
   выбранный перечень в браузере и воспроизведение реальных переводов по дням.
 - `scripts/check_outputs.py` — 21 проверка сохранённых и свежих выгрузок по ТЗ.
+- `scripts/verify.py` — 21 проверка выгрузок + 24 HTTP-проверки через `smoke_api.py`; JSON с результатами и SHA-256, без ключей.
 - `app/tools.py`, `app/dataset.py` и `data/payments.csv` сохранены для совместимости прежних API.
   Главный AML-экран и агент их не используют; новые функции кейса добавляем в графовые модули.
 

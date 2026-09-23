@@ -286,7 +286,7 @@ def cluster_table(G: nx.DiGraph, df: pd.DataFrame) -> pd.DataFrame:
     for c, g in df.groupby("cluster_id"):
         members = set(g.gid)
         internal = sum(d["sum_kzt"] for u, v, d in G.edges(data=True) if u in members and v in members)
-        top = g.sort_values("priority_score", ascending=False).head(5)
+        top = g.sort_values(["priority_score", "gid"], ascending=[False, True]).head(5)
         roles = g.role.value_counts()
         rows.append({
             "cluster_id": int(c), "n_nodes": len(g), "n_seed": int(g.is_seed.sum()),
@@ -295,14 +295,14 @@ def cluster_table(G: nx.DiGraph, df: pd.DataFrame) -> pd.DataFrame:
             "hypothesis": hypothesis(c, g, roles, internal),
             "roles": "; ".join(f"{k}:{v}" for k, v in roles.items()),
         })
-    return pd.DataFrame(rows).sort_values("sum_kzt_internal", ascending=False)
+    return pd.DataFrame(rows).sort_values(["sum_kzt_internal", "cluster_id"], ascending=[False, True])
 
 
 def hypothesis(c, g, roles, internal) -> str:
     if c == 0:
         return f"{len(g)} seed без переводов ≥5 000 ₸ в июле: активность вне выборки неизвестна — запросить полную выписку"
     n_seed = int(g.is_seed.sum())
-    lead = g.sort_values("priority_score", ascending=False).iloc[0]
+    lead = g.sort_values(["priority_score", "gid"], ascending=[False, True]).iloc[0]
     parts = []
     if roles.get("coordinator", 0) or roles.get("consolidator", 0):
         parts.append(f"признаки сбора средств: {roles.get('coordinator', 0)} координ., "
@@ -384,7 +384,8 @@ def run(data_dir: Path, out_dir: Path) -> dict:
 
     df["cluster_id"] = df.gid.map(clusters(G, df)).astype(int)
     df["priority_score"] = priority(df)
-    df = df.sort_values("priority_score", ascending=False)
+    # Equal scores use the full gid, so pandas/NumPy versions cannot change the top-N boundary.
+    df = df.sort_values(["priority_score", "gid"], ascending=[False, True])
 
     out_dir.mkdir(parents=True, exist_ok=True)
     cols = ["gid", "role", "role_score", "cluster_id", "priority_score", "evidence",

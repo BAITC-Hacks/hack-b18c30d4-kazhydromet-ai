@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "timestamp_utc": "2026-09-23T12:19:31.334244Z",
+  "git_commit": "f4723cdbf5ec0be8596e7d538e6528c432b76ef9",
+  "workingtree_dirty_before": false,
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": {
+    "version": "3.12.13",
+    "implementation": "CPython"
+  },
+  "steps": [
+    {
+      "command": [
+        "python",
+        "scripts/check_outputs.py"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 7.188,
+      "check_count": 21,
+      "stdout": "OK   full recompute under 300 s (5.28 s)\nOK   read generated CSVs and raw parquet (saved + fresh)\nOK   nodes_roles: 2248 rows (found 2248)\nOK   nodes_roles: unique gid\nOK   nodes_roles: gid match raw nodes\nOK   nodes_roles: required columns\nOK   nodes_roles: no empty required values\nOK   nodes_roles: roles in dictionary (invalid 0)\nOK   nodes_roles: role_score in [0,1] (invalid 0)\nOK   nodes_roles: priority_score in [0,1] (invalid 0)\nOK   nodes_roles: evidence 1..200 chars with a digit (invalid 0)\nOK   clusters: required columns\nOK   clusters: covers every node cluster_id\nOK   clusters: sum n_nodes = 2248 (found 2248)\nOK   clusters: sum n_seed = 81 (found 81)\nOK   top_nodes: at least 20 rows (found 50)\nOK   top_nodes: required columns\nOK   top_nodes: descending priority\nOK   top_nodes: gid in nodes_roles\nOK   top_nodes: consecutive rank\nOK   depth=4 with out_deg=0: no terminal role (checked 444, invalid 0)\n"
+    },
+    {
+      "command": [
+        "python",
+        "scripts/smoke_api.py",
+        "--port",
+        "8013"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 7.859,
+      "check_count": 24,
+      "stdout": "OK   health: ready, mock provider, public demo\nOK   static /: HTTP 200\nOK   static /graph.html: HTTP 200\nOK   static /vendor/tailwind.js: HTTP 200\nOK   static /vendor/vis-network.min.js: HTTP 200\nOK   overview: 2248 nodes and 81 seeds\nOK   graph: 2248 string gids and 3119 directed edges\nOK   top: 20 clients in descending priority\nOK   control card: 19 payers, 61 receivers, evidence and gaps\nOK   fourth hop remains truncated, not terminal\nOK   timeline: 31 days, monthly sums match card\nOK   review coverage: union of transfers, no double counting\nOK   report: Markdown attachment with exactly selected cards\nOK   unknown gid: report remains readable\nOK   unknown gid: node returns 404\nOK   unknown gid: timeline returns 404\nOK   report preview: HTML with selected gids\nOK   chat: HTTP 200, mock answer grounded in node_card\nOK   chat context: selected client and day reach daily_transfers\nOK   chat context: selected review list reaches review_scope\nOK   chat context: 19-digit gid rejected with HTTP 422\nOK   public demo: POST /api/recompute is blocked\nOK   public demo: POST /api/dataset/upload is blocked\nOK   public demo: POST /api/dataset/reset is blocked\nPASS 24 checks; no API key or external model used\nSTOPPED own test server on 127.0.0.1:8013\n"
+    }
+  ],
+  "sha256": {
+    "data/raw/nodes.parquet": "d2a45b0df6e9352832d5fb09839d10b9e23f898156c3bab263b051b31cc0296d",
+    "data/raw/edges.parquet": "4e71dde5cd3115bcb26e91202665532ee6581cf8233a9fc8059ea59fb7358a38",
+    "data/raw/transactions.parquet": "c30c5317b5439591dde86f2058dc47a3d19b2900c055ded994fe547f6fb7e7da",
+    "out/nodes_roles.csv": "11e5c25dacafc4dce74a4db15246067ac761e288bbb0641c73cd5bd1f995e4d5",
+    "out/clusters.csv": "2967f0a0031c3c7dbd3693a49d83147e12988623f0c2042fba69b20da01649b4",
+    "out/top_nodes.csv": "df2febba32f9e0793566aa00f7bc5c595ffe973c95a799f0b97ec93050e90e5e",
+    "out/graph.json": "f1f805f948334327c2f3e0517c6b0073ab689ded17c0005d06ea0830ca1fcd89",
+    "out/summary.json": "4adb6afdde58e5ffb71f0c155438fca698184e532c46192f762c3db8013a7778"
+  },
+  "overall_passed": true
+}

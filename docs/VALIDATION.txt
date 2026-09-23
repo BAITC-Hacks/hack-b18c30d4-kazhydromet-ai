@@ -15,7 +15,7 @@ OK   clusters: sum n_nodes = 2248 (found 2248)
 OK   clusters: sum n_seed = 81 (found 81)
 OK   top_nodes: at least 20 rows (found 50)
 OK   top_nodes: required columns
-OK   top_nodes: descending priority
+OK   top_nodes: descending priority, gid breaks ties
 OK   top_nodes: gid in nodes_roles
 OK   top_nodes: consecutive rank
 OK   depth=4 with out_deg=0: no terminal role (checked 444, invalid 0)
