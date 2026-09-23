@@ -6,3 +6,4 @@ __pycache__/
 
 # case raw downloads (canonical copies in data/raw, docs/case)
 data/case/
+tmp/
