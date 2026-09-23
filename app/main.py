@@ -5,10 +5,10 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import dataset, tools
+from . import dataset, graph, tools
 from .agent import MODEL, ask
 
-app = FastAPI(title="HackAlem Starter")
+app = FastAPI(title="Граф денег")
 
 
 class Chat(BaseModel):
@@ -18,6 +18,53 @@ class Chat(BaseModel):
 @app.get("/api/health")
 def health():
     return {"ok": True, "model": MODEL, "live": bool(os.getenv("OPENAI_API_KEY"))}
+
+
+@app.get("/api/overview")
+def overview():
+    return graph.overview()
+
+
+@app.get("/api/graph")
+def graph_all():
+    return graph.graph_json()
+
+
+@app.get("/api/node/{gid}")
+def node(gid: str):
+    card = graph.node_card(gid)
+    if "error" in card:
+        raise HTTPException(404, card["error"])
+    return card
+
+
+@app.get("/api/top")
+def top(n: int = 50, role: str | None = None):
+    return graph.top(n, role)
+
+
+@app.get("/api/clusters")
+def clusters():
+    return graph.clusters()
+
+
+@app.get("/api/clusters/{cluster_id}")
+def cluster(cluster_id: int):
+    return graph.cluster_detail(cluster_id)
+
+
+@app.get("/api/path")
+def path(src: str, dst: str):
+    return graph.money_path(src, dst)
+
+
+@app.post("/api/recompute")
+def recompute():
+    """Полный пересчёт от сырых parquet до выгрузок."""
+    from . import pipeline
+    s = pipeline.run(graph.DATA, graph.OUT)
+    graph.reload()
+    return s
 
 
 @app.get("/api/summary")
