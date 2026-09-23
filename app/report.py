@@ -130,7 +130,7 @@ def _node_section(card: dict, requested_gid: str) -> str:
         f"| Разных получателей (`out_deg`) | {out_count} |",
         f"| Видимые входящие (`in_kzt`) | {_kzt(metrics['in_kzt'])} |",
         f"| Видимые исходящие (`out_kzt`) | {out_amount} |",
-        f"| Доля исходящей суммы за ≤2 дня после поступления (`fast_share`) | {fast_share} |",
+        f"| Доля исходящей суммы в дату входа или следующие 2 дня (`fast_share`; порядок внутри дня неизвестен) | {fast_share} |",
         f"| Циклы до 6 шагов (`cycles`) | {int(metrics['cycles'])} |",
         f"| Известных клиентов в двух шагах выше по потоку (`seeds_2hop`) | {int(metrics['seeds_2hop'])} |",
         f"| Флагов аномалий (`anomaly_count`) | {anomaly_count} |",

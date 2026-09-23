@@ -102,7 +102,7 @@ def temporal_features(tx: pd.DataFrame) -> pd.DataFrame:
     inc = tx.rename(columns={"dst": "gid", "src": "payer"})[["gid", "payer", "date", "sum_kzt"]]
     out = tx.rename(columns={"src": "gid"})[["gid", "date", "sum_kzt"]]
 
-    # доля исходящей суммы, ушедшей в течение N дней после какого-либо поступления
+    # Доля исходящей суммы в дату любого входящего или следующие N дней; порядок внутри дня неизвестен.
     m = out.reset_index().merge(inc[["gid", "date"]], on="gid", suffixes=("", "_in"))
     lag = (m["date"] - m["date_in"]).dt.days
     fast_ids = m.loc[(lag >= 0) & (lag <= days), "index"].unique()
@@ -125,8 +125,9 @@ def anomaly_flags(tx: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
     flags: dict[int, list[str]] = {}
     small = (tx.sum_kzt >= T["small_lo"]) & (tx.sum_kzt < T["small_hi"])
     inc = tx.assign(small=small).groupby("dst").agg(n=("small", "size"), k=("small", "sum"), p=("src", "nunique"))
+    small_payers = tx.loc[small].groupby("dst").src.nunique()
     for g, r in inc[(inc.n >= T["small_min_tx"]) & (inc.k / inc.n >= T["small_share"])].iterrows():
-        flags.setdefault(g, []).append(f"дробление: {int(r.k)} из {int(r.n)} входящих по 5–10 тыс. ₸ от {int(r.p)} плательщ.")
+        flags.setdefault(g, []).append(f"дробление: {int(r.k)} из {int(r.n)} входящих по 5 000–9 999 ₸ от {int(small_payers.get(g, 0))} плательщ.; всего плательщ. {int(r.p)}")
     rep = tx.groupby(["src", "sum_kzt"]).size()
     for (g, amt), k in rep[rep >= T["repeat_same_amount"]].items():
         flags.setdefault(g, []).append(f"повтор суммы: {k}×{amt:,.0f} ₸".replace(",", " "))
@@ -245,11 +246,11 @@ def assign_role(r) -> tuple[str, float, str]:
             f"({pt:.0%}, {r.out_deg} получ.) — удерживает большую часть")
 
     if r.out_deg > 0:
-        fast = f"; {r.fast_share:.0%} суммы ушло за ≤{T['fast_days']} дня после поступления" \
+        fast = f"; {r.fast_share:.0%} исходящих в дату входа или +1–{T['fast_days']} дня" \
             if r.fast_share > 0 else ""
         if r.is_seed:
             return "transit", 0.45, (
-                f"seed: отправил {kzt(r.out_kzt)} {r.out_deg} получ.; входящие вне выгрузки — роль по исходящим{fast}")
+                f"seed: отправил {kzt(r.out_kzt)} {r.out_deg} получ.; полнота входящих неизвестна — роль по исходящим{fast}")
         if pd.notna(pt) and T["transit_pt_lo"] <= pt <= T["transit_pt_hi"]:
             score = min(1.0, 0.55 + 0.4 * r.fast_share - 0.2 * abs(1 - pt))
             return "transit", score, (
@@ -349,7 +350,7 @@ def why(r) -> str:
     if r.in_core:
         extra.append(f"в кольце возвратных потоков, {r.cycles} циклов")
     if r.fast_share >= 0.5 and r.out_deg:
-        extra.append(f"{r.fast_share:.0%} ушло за ≤2 дня")
+        extra.append(f"{r.fast_share:.0%} исходящих в дату входа или +1–2 дня")
     if r.is_seed:
         extra.append("уже известен (seed)")
     extra = [x for x in extra if x.split(",")[0] not in r.evidence]

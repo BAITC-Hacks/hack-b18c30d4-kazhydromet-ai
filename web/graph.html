@@ -231,7 +231,7 @@ async function openNode(gid, redraw = true) {
       <div class="grid grid-cols-2 gap-x-3 text-xs my-2">
         <div>получил от: <b>${m.in_deg}</b> плательщ.</div><div>отправил: <b>${m.out_deg}</b> получ.</div>
         <div>вход: <b>${kzt(m.in_kzt)}</b></div><div>выход: <b>${kzt(m.out_kzt)}</b></div>
-        <div>отдал дальше: <b>${pt}</b></div><div>ушло за ≤2 дня: <b>${Math.round(m.fast_share * 100)}%</b></div>
+        <div>отдал дальше: <b>${pt}</b></div><div>исходящие в дату входа или +1–2 дня: <b>${Math.round(m.fast_share * 100)}%</b></div>
         <div>seed в 2 шагах выше: <b>${m.seeds_2hop}</b></div><div>циклов через узел: <b>${m.cycles}</b></div>
         <div>колено: <b>${m.depth}</b></div><div>кластер: <b class="gid" data-cluster="${c.cluster_id}">${c.cluster_id}</b></div>
         <div class="col-span-2">активность: ${c.first_date ?? "—"} — ${c.last_date ?? "—"}</div></div>
