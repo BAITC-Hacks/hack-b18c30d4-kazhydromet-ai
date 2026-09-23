@@ -1,4 +1,5 @@
-"""Бизнес-логика. Чистые функции -> JSON-совместимые dict/list. Их вызывают и API, и агент."""
+"""Совместимость трёх прежних API сводки, аномалий и отказов.
+AML-агент и графовый экран этот модуль не используют."""
 import json
 from functools import cache
 from pathlib import Path
@@ -37,35 +38,6 @@ def find_anomalies(limit: int = 10) -> list[dict]:
     d = df()
     out = d[d["is_flagged"] == 1].sort_values("amount_kzt", ascending=False).head(limit)
     return _records(out[["date", "iin", "region", "service", "amount_kzt", "status", "flag_reason"]])
-
-
-def citizen_profile(iin: str) -> dict:
-    """Всё по одному человеку: что начислено, что выплачено, что просрочено."""
-    d = df()
-    c = d[d["iin"].astype(str) == str(iin).strip()]
-    if c.empty:
-        return {"error": f"Гражданин с ИИН {iin} не найден"}
-    return {
-        "iin": str(iin),
-        "region": c["region"].mode()[0],
-        "documents": len(c),
-        "to_budget_kzt": int(c[c["direction"] == "В бюджет"]["amount_kzt"].sum()),
-        "from_budget_kzt": int(c[c["direction"] == "Из бюджета"]["amount_kzt"].sum()),
-        "overdue": _records(c[c["status"] == "Просрочено"][["date", "service", "amount_kzt", "days_overdue"]]),
-        "flagged": _records(c[c["is_flagged"] == 1][["date", "service", "amount_kzt", "flag_reason"]]),
-        "by_type": {k: int(v) for k, v in c.groupby("service_type")["amount_kzt"].sum().items()},
-    }
-
-
-def search_payments(service_type: str | None = None, region: str | None = None, status: str | None = None,
-                    min_amount: int = 0, limit: int = 20) -> list[dict]:
-    """Поиск начислений и выплат по типу услуги, региону, статусу и сумме."""
-    d = df()
-    for col, val in (("service_type", service_type), ("region", region), ("status", status)):
-        if val:
-            d = d[d[col].str.contains(val, case=False, na=False)]
-    out = d[d["amount_kzt"] >= min_amount].sort_values("amount_kzt", ascending=False).head(limit)
-    return _records(out[["date", "iin", "region", "service_type", "service", "amount_kzt", "status"]])
 
 
 def refusal_rates() -> list[dict]:
