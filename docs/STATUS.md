@@ -15,6 +15,8 @@
 
 Codex: отчёт /api/report готов
 
+Codex, 23.09.2026 15:47: новая продуктовая полировка по запросу Ali. Главный Codex владеет `web/index.html`, `web/app.css`, `web/review-list.js` и визуальной проверкой. Yerbu — только `docs/QA-PC2.md` (промпт `docs/PROMPT-PC2-QA.md`); Abylaykhan7 — только `app/report.py` и `docs/REPORT-PC3.md` (промпт `docs/PROMPT-PC3-REPORT.md`). Пороги и API сохраняются. Эти задачи не пересекаются.
+
 Codex: API расширен — `GET /api/routes?gid=&limit=` и поля карточки `repeated_routes`, `repeated_routes_count`, `repeated_routes_note`. Найдено 429 повторяющихся цепочек с совместимыми датами, без изменения ролей и приоритета; прежние поля сохраняются.
 
 Codex, 23.09.2026: главный экран упрощён, `plain` есть в карточках, топе, контрагентах и узлах `/api/graph`; `/api/overview.anomalies` — число узлов с флагами. Пересчёт, 21/21 проверка CSV, чистая установка, офлайн-браузер, live/mock, отчёт и прежние API проверены. Итог и ограничения проверки — `docs/REVIEW-codex-2.md`.
