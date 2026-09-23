@@ -123,7 +123,7 @@ def anomaly_flags(tx: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
     """Три правила-флага: дробление на мелкие суммы, повтор одинаковых сумм, оборот нетипичен для колена."""
     T = THRESHOLDS
     flags: dict[int, list[str]] = {}
-    small = tx.sum_kzt.between(T["small_lo"], T["small_hi"] - 1)
+    small = (tx.sum_kzt >= T["small_lo"]) & (tx.sum_kzt < T["small_hi"])
     inc = tx.assign(small=small).groupby("dst").agg(n=("small", "size"), k=("small", "sum"), p=("src", "nunique"))
     for g, r in inc[(inc.n >= T["small_min_tx"]) & (inc.k / inc.n >= T["small_share"])].iterrows():
         flags.setdefault(g, []).append(f"дробление: {int(r.k)} из {int(r.n)} входящих по 5–10 тыс. ₸ от {int(r.p)} плательщ.")
@@ -134,7 +134,7 @@ def anomaly_flags(tx: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
     z = flow.groupby(df.depth).transform(lambda x: (x - x.mean()) / x.std())
     for g, dz, dep in zip(df.gid, z, df.depth):
         if dz > T["depth_z"]:
-            flags.setdefault(g, []).append(f"оборот нетипичен для колена {dep} (z={dz:.1f})")
+            flags.setdefault(g, []).append(f"оборот нетипичен для колена {dep} (z={dz:.3f}, порог >2.5)")
     return pd.DataFrame({"anomaly_flags": {g: "; ".join(v) for g, v in flags.items()},
                          "anomaly_count": {g: len(v) for g, v in flags.items()}})
 
@@ -300,7 +300,7 @@ def cluster_table(G: nx.DiGraph, df: pd.DataFrame) -> pd.DataFrame:
 
 def hypothesis(c, g, roles, internal) -> str:
     if c == 0:
-        return f"{len(g)} seed без переводов ≥5 000 ₸ в июле: активность ниже порога или в другом банке — запросить выгрузку"
+        return f"{len(g)} seed без переводов ≥5 000 ₸ в июле: активность вне выборки неизвестна — запросить полную выписку"
     n_seed = int(g.is_seed.sum())
     lead = g.sort_values("priority_score", ascending=False).iloc[0]
     parts = []

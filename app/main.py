@@ -1,9 +1,10 @@
 import os
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import dataset, graph, tools
 from .agent import MODEL, ask
@@ -11,8 +12,13 @@ from .agent import MODEL, ask
 app = FastAPI(title="Граф денег")
 
 
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(strict=True, min_length=1)
+
+
 class Chat(BaseModel):
-    messages: list[dict]  # [{"role": "user" | "assistant", "content": "..."}]
+    messages: list[ChatMessage] = Field(min_length=1, max_length=50)
 
 
 @app.get("/api/health")
@@ -103,7 +109,7 @@ def dataset_reset():
 
 @app.post("/api/chat")
 async def chat(body: Chat):
-    return await ask(body.messages)
+    return await ask([message.model_dump() for message in body.messages])
 
 
 @app.get("/api/report")
