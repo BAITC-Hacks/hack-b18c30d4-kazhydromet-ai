@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import dataset, graph, tools
-from .agent import MODEL, ask
+from .agent import LIVE, MODEL, PROVIDER, ask
 
 app = FastAPI(title="Граф денег")
 
@@ -23,7 +23,7 @@ class Chat(BaseModel):
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "model": MODEL, "live": bool(os.getenv("OPENAI_API_KEY"))}
+    return {"ok": True, "provider": PROVIDER, "model": MODEL, "live": LIVE}
 
 
 @app.get("/api/overview")

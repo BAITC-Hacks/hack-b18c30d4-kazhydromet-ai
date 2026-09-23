@@ -9,7 +9,21 @@ from openai.types.shared import Reasoning
 
 from . import graph
 
-MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
+# Провайдер LLM: openai (по умолчанию) или nvidia (build.nvidia.com, OpenAI-совместимый API).
+# NVIDIA включается только если в .env есть LLM_PROVIDER=nvidia и NVIDIA_API_KEY, иначе всё как раньше.
+PROVIDER = "nvidia" if os.getenv("LLM_PROVIDER", "").lower() == "nvidia" and os.getenv("NVIDIA_API_KEY") else "openai"
+if PROVIDER == "nvidia":
+    from agents import OpenAIChatCompletionsModel
+    from openai import AsyncOpenAI
+
+    MODEL = os.getenv("NVIDIA_MODEL", "nvidia/nemotron-3-super-120b-a12b")
+    _MODEL_OBJ = OpenAIChatCompletionsModel(model=MODEL, openai_client=AsyncOpenAI(
+        base_url=os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"),
+        api_key=os.getenv("NVIDIA_API_KEY")))
+else:
+    MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
+    _MODEL_OBJ = MODEL
+LIVE = bool(os.getenv("NVIDIA_API_KEY") if PROVIDER == "nvidia" else os.getenv("OPENAI_API_KEY"))
 
 # Трейсинг в облако OpenAI на демо не нужен и добавляет задержку
 set_tracing_disabled(True)
@@ -19,7 +33,7 @@ def _settings() -> ModelSettings:
     """tool_choice=required заставляет агента сходить в данные, а не отвечать по общим соображениям.
     После первого вызова инструмента SDK сам сбрасывает его в auto, поэтому зацикливания не будет."""
     kw = {"tool_choice": "required"}
-    if MODEL.startswith(("gpt-5", "o1", "o3", "o4")):
+    if PROVIDER == "openai" and MODEL.startswith(("gpt-5", "o1", "o3", "o4")):
         kw["reasoning"] = Reasoning(effort="low")  # на сцене скорость важнее глубины
     return ModelSettings(**kw)
 
@@ -138,7 +152,7 @@ agent = Agent(
     name="AMLGraphAssistant",
     instructions=INSTRUCTIONS,
     tools=[network_overview, top_priority, node_card, common_receivers, money_path, cluster_info],
-    model=MODEL,
+    model=_MODEL_OBJ,
     model_settings=_settings(),
 )
 
@@ -184,7 +198,7 @@ def _mock(error: str | None = None, messages: list[dict] | None = None) -> dict:
 
 
 async def ask(messages: list[dict]) -> dict:
-    if not os.getenv("OPENAI_API_KEY"):
+    if not LIVE:
         return _mock(messages=messages)
     try:
         return await asyncio.wait_for(_ask_live(messages), timeout=25)
