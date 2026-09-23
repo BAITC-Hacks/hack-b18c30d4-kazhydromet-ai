@@ -113,4 +113,19 @@ def root():
     return RedirectResponse("/graph.html")
 
 
+@app.get("/api/report")
+def analyst_report(top: int = 10, gids: str | None = None):
+    from fastapi.responses import PlainTextResponse
+
+    from .report import build_report
+
+    selected = gids.split(",") if gids is not None else None
+    markdown = build_report(gids=selected, top=top)
+    return PlainTextResponse(
+        markdown,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=aml_report.md"},
+    )
+
+
 app.mount("/", StaticFiles(directory=Path(__file__).resolve().parent.parent / "web", html=True), name="web")
