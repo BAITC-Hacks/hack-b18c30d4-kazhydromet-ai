@@ -1,6 +1,7 @@
 """Запросы к построенному графу: карточка узла, соседи, общий получатель, путь, кластеры.
 Функции возвращают JSON-совместимые dict/list; gid всегда строкой (18 цифр не влезают в JS number)."""
 from functools import lru_cache
+from itertools import islice
 from pathlib import Path
 
 import networkx as nx
@@ -15,9 +16,11 @@ DATA = ROOT / "data" / "raw"
 
 @lru_cache(maxsize=1)
 def _state():
-    if not (OUT / "nodes_roles.csv").exists():
+    outputs = ("nodes_roles.csv", "clusters.csv", "top_nodes.csv", "graph.json", "summary.json")
+    if any(not (OUT / name).exists() for name in outputs):
         pipeline.run(DATA, OUT)
-    df = pd.read_csv(OUT / "nodes_roles.csv").set_index("gid")
+    df = pd.read_csv(OUT / "nodes_roles.csv").set_index("gid").sort_values(
+        "priority_score", ascending=False, kind="stable")
     cl = pd.read_csv(OUT / "clusters.csv")
     top = pd.read_csv(OUT / "top_nodes.csv")
     edges, nodes, tx = pipeline.load(DATA)
@@ -64,7 +67,7 @@ def node_card(gid, limit: int = 15) -> dict:
     card = {**_brief(g), "role_score": float(r.role_score), "evidence": r.evidence,
             "metrics": {k: (v.item() if hasattr(v, "item") else v) for k, v in r.drop(
                 ["role", "role_score", "cluster_id", "priority_score", "evidence"]).items()},
-            "rank": int((df.priority_score > r.priority_score).sum() + 1),
+            "rank": int(df.index.get_loc(g) + 1),
             "first_date": t.date.min().strftime("%d.%m.%Y") if len(t) else None,
             "last_date": t.date.max().strftime("%d.%m.%Y") if len(t) else None,
             "in": _counterparts(g, "in", limit), "out": _counterparts(g, "out", limit)}
@@ -77,7 +80,7 @@ def gaps(r) -> list[str]:
     out = []
     if r.truncated:
         out.append("исходящие не выгружались (4-е колено) — запросить исходящие переводы узла за июль")
-    if r.is_seed or r.pass_through > 2:
+    if r.is_seed or r.out_kzt > r.in_kzt:
         out.append("входящие видны частично — запросить входящие переводы из-за пределов выборки")
     if r.in_deg + r.out_deg == 0:
         out.append("нет переводов ≥5 000 ₸ — запросить операции ниже порога и в других банках")
@@ -94,9 +97,9 @@ def graph_json() -> dict:
 
 def top(n: int = 20, role: str | None = None) -> list[dict]:
     """rank — глобальный (по всем 2 248 узлам), даже при фильтре по роли."""
-    df = _state()[0].sort_values("priority_score", ascending=False)
+    df = _state()[0].sort_values("priority_score", ascending=False, kind="stable")
     df = df.assign(rank=range(1, len(df) + 1))
-    d = (df[df.role == role] if role else df).head(n)
+    d = (df[df.role == role] if role else df).head(max(0, n))
     return [{**_brief(g), "rank": int(r["rank"]), "evidence": r.evidence,
              "why": pipeline.why(r.rename(g))} for g, r in d.iterrows()]
 
@@ -139,8 +142,11 @@ def money_path(src, dst, max_len: int = 6) -> dict:
     a, b = _gid(src), _gid(dst)
     if a is None or b is None:
         return {"error": "gid не найден"}
+    if a == b:
+        return {"src": str(a), "dst": str(b), "paths": [],
+                "note": "отправитель и получатель совпадают: нет шага перевода; это не маршрут денег"}
     try:
-        paths = list(nx.all_shortest_paths(G, a, b))[:5]
+        paths = list(islice(nx.all_shortest_paths(G, a, b), 5))
     except nx.NetworkXNoPath:
         return {"src": str(a), "dst": str(b), "paths": [], "note": "направленного пути денег нет"}
     if len(paths[0]) - 1 > max_len:
