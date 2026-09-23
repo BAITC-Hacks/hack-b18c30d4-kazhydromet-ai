@@ -226,6 +226,7 @@ async function openNode(gid, redraw = true) {
         <div>seed в 2 шагах выше: <b>${m.seeds_2hop}</b></div><div>циклов через узел: <b>${m.cycles}</b></div>
         <div>колено: <b>${m.depth}</b></div><div>кластер: <b class="gid" data-cluster="${c.cluster_id}">${c.cluster_id}</b></div>
         <div class="col-span-2">активность: ${c.first_date ?? "—"} — ${c.last_date ?? "—"}</div></div>
+      ${m.anomaly_count ? `<div class="bg-rose-50 border-l-4 border-rose-400 p-2 my-2 text-xs"><b>Аномалии (правила):</b> ${esc(m.anomaly_flags)}</div>` : ""}
       ${c.gaps.length ? `<div class="bg-sky-50 p-2 rounded my-2 text-xs"><b>Что запросить дальше:</b><ul class="list-disc ml-4">${c.gaps.map(g => `<li>${esc(g)}</li>`).join("")}</ul></div>` : ""}
       <div class="font-semibold mt-3">Получил от</div><table class="w-full text-xs">${rows(c.in)}</table>
       <div class="font-semibold mt-3">Отправил</div><table class="w-full text-xs">${rows(c.out)}</table>`;

@@ -31,6 +31,11 @@ THRESHOLDS = {
     "terminal_min_kzt": 100_000,  # terminal: получил ≥100 тыс. или от ≥2 плательщиков
     "fast_days": 2,           # сквозной транзит: ушло в течение 2 дней после поступления
     "sync_payers": 3,         # синхронные переводы: ≥3 разных плательщика в один день
+    # аномалии (флаги, на роль и приоритет не влияют)
+    "small_lo": 5_000, "small_hi": 10_000,  # дробление: мелкие переводы 5–10 тыс. ₸ ...
+    "small_min_tx": 5, "small_share": 0.7,  # ... ≥5 входящих, из них ≥70% мелкие
+    "repeat_same_amount": 8,  # повтор: одна и та же сумма отправлена ≥8 раз
+    "depth_z": 2.5,           # оборот нетипичен для своего колена: z-score log(оборота) > 2.5
 }
 
 ROLE_WEIGHT = {"coordinator": 1.0, "consolidator": 0.85, "distributor": 0.75,
@@ -88,6 +93,26 @@ def temporal_features(tx: pd.DataFrame) -> pd.DataFrame:
     return pd.concat([fast, sync, active], axis=1)
 
 
+def anomaly_flags(tx: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
+    """Три правила-флага: дробление на мелкие суммы, повтор одинаковых сумм, оборот нетипичен для колена."""
+    T = THRESHOLDS
+    flags: dict[int, list[str]] = {}
+    small = tx.sum_kzt.between(T["small_lo"], T["small_hi"] - 1)
+    inc = tx.assign(small=small).groupby("dst").agg(n=("small", "size"), k=("small", "sum"), p=("src", "nunique"))
+    for g, r in inc[(inc.n >= T["small_min_tx"]) & (inc.k / inc.n >= T["small_share"])].iterrows():
+        flags.setdefault(g, []).append(f"дробление: {int(r.k)} из {int(r.n)} входящих по 5–10 тыс. ₸ от {int(r.p)} плательщ.")
+    rep = tx.groupby(["src", "sum_kzt"]).size()
+    for (g, amt), k in rep[rep >= T["repeat_same_amount"]].items():
+        flags.setdefault(g, []).append(f"повтор суммы: {k}×{amt:,.0f} ₸".replace(",", " "))
+    flow = np.log1p(df.in_kzt + df.out_kzt)
+    z = flow.groupby(df.depth).transform(lambda x: (x - x.mean()) / x.std())
+    for g, dz, dep in zip(df.gid, z, df.depth):
+        if dz > T["depth_z"]:
+            flags.setdefault(g, []).append(f"оборот нетипичен для колена {dep} (z={dz:.1f})")
+    return pd.DataFrame({"anomaly_flags": {g: "; ".join(v) for g, v in flags.items()},
+                         "anomaly_count": {g: len(v) for g, v in flags.items()}})
+
+
 def features(G: nx.DiGraph, nodes: pd.DataFrame, tx: pd.DataFrame) -> pd.DataFrame:
     df = nodes[["gid", "depth", "is_seed"]].copy()
     df["depth"] = df.depth.astype(int)
@@ -128,6 +153,9 @@ def features(G: nx.DiGraph, nodes: pd.DataFrame, tx: pd.DataFrame) -> pd.DataFra
     df["isolated"] = (df.in_deg == 0) & (df.out_deg == 0)
 
     df = df.merge(temporal_features(tx), left_on="gid", right_index=True, how="left")
+    df = df.merge(anomaly_flags(tx, df), left_on="gid", right_index=True, how="left")
+    df["anomaly_flags"] = df.anomaly_flags.fillna("нет")
+    df["anomaly_count"] = df.anomaly_count.fillna(0).astype(int)
     df[["fast_share", "max_payers_day", "active_days"]] = \
         df[["fast_share", "max_payers_day", "active_days"]].fillna(0)
     df["max_payers_day"] = df.max_payers_day.astype(int)
@@ -337,7 +365,7 @@ def run(data_dir: Path, out_dir: Path) -> dict:
             "depth", "is_seed", "truncated", "in_deg", "out_deg", "in_kzt", "out_kzt", "in_tx", "out_tx",
             "pass_through", "pagerank", "hub", "authority", "betweenness", "seed_payers", "seeds_2hop",
             "upstream_seeds", "cycles", "in_core",
-            "fast_share", "max_payers_day", "active_days"]
+            "fast_share", "max_payers_day", "active_days", "anomaly_count", "anomaly_flags"]
     # pass_through = -1: входящих в выгрузке нет, отношение не определено
     df[cols].fillna({"pass_through": -1}).to_csv(out_dir / "nodes_roles.csv", index=False)
 
@@ -354,7 +382,8 @@ def run(data_dir: Path, out_dir: Path) -> dict:
     graph = {
         "nodes": [{"id": str(r.gid), "label": str(r.gid)[-10:], "role": r.role, "cluster": int(r.cluster_id),
                    "priority": float(r.priority_score), "is_seed": bool(r.is_seed), "depth": int(r.depth),
-                   "truncated": bool(r.truncated), "in_core": bool(r.in_core), "in_kzt": float(r.in_kzt), "out_kzt": float(r.out_kzt),
+                   "truncated": bool(r.truncated), "in_core": bool(r.in_core),
+                   "anomalies": int(r.anomaly_count), "in_kzt": float(r.in_kzt), "out_kzt": float(r.out_kzt),
                    "evidence": r.evidence} for r in df.itertuples()],
         "edges": [{"from": str(r.src), "to": str(r.dst), "sum_kzt": float(r.sum_kzt), "n_tx": int(r.n_tx)}
                   for r in edges.itertuples()],
@@ -366,6 +395,7 @@ def run(data_dir: Path, out_dir: Path) -> dict:
     summary = {
         "nodes": len(df), "edges": len(edges), "clusters": int(ct.shape[0]),
         "roles": df.role.value_counts().to_dict(), "truncated": int(df.truncated.sum()),
+        "anomalies": int((df.anomaly_count > 0).sum()),
         "resilience": resil, "seconds": round(time.time() - t0, 1),
     }
     (out_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")

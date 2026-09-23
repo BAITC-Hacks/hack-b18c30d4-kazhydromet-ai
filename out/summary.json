@@ -11,6 +11,7 @@
   "coordinator": 17
  },
  "truncated": 444,
+ "anomalies": 37,
  "resilience": [
   {
    "removed_top": 0,
@@ -37,5 +38,5 @@
    "fragments": 103
   }
  ],
- "seconds": 3.8
+ "seconds": 5.0
 }
