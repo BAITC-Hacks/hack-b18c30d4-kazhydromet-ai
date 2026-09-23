@@ -8,7 +8,7 @@ import pandas as pd
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 ACTIVE = DATA / "active.csv"  # сюда кладётся загруженный файл
-DEFAULT = DATA / "transactions.csv"
+DEFAULT = DATA / "payments.csv"
 AGGS = {"sum", "mean", "count", "min", "max", "median", "nunique"}
 
 

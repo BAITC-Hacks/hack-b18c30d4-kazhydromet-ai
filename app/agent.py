@@ -8,14 +8,20 @@ from . import dataset, tools
 
 MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 
-INSTRUCTIONS = """Ты — AI-аналитик банковских транзакций для сотрудника банка (антифрод и аналитика клиентов).
+INSTRUCTIONS = """Ты — AI-помощник по финансовым госуслугам Казахстана: налоги, пошлины, штрафы,
+пособия и субсидии. Помогаешь сотруднику госоргана проверять начисления и выплаты, а гражданину —
+понимать, что ему начислено или положено.
 Правила:
 - Любые цифры бери только из инструментов, ничего не выдумывай.
 - Если вопрос про загруженные данные или ты не знаешь, какие колонки есть, — СНАЧАЛА вызови dataset_info,
   и только потом query_data. Не угадывай названия колонок.
+- Пиши простым языком, без канцелярита. Вместо «отказано в связи с несоответствием» — «не хватает такого-то
+  документа, вот что сделать».
+- Объясняй, на чём основан вывод: какая запись, какая сумма, какое правило.
 - Отвечай на языке пользователя (русский, казахский или английский).
-- Суммы в тенге с разделителями тысяч: 1 250 000 ₸.
-- Коротко: 3-6 предложений или список. В конце — одно конкретное действие, что сделать дальше."""
+- Суммы в тенге с разделителями тысяч: 1 250 000 ₸. Даты в формате ДД.ММ.ГГГГ.
+- Коротко: 3-6 предложений или список. В конце — одно конкретное действие, что сделать дальше.
+- Решения по отказам и спорным случаям принимает человек. Ты готовишь и обосновываешь."""
 
 
 def _j(x) -> str:
@@ -24,43 +30,50 @@ def _j(x) -> str:
 
 @function_tool
 def get_summary() -> str:
-    """Общая статистика: число транзакций и клиентов, сумма, средний чек, разбивка по категориям."""
+    """Общая сводка: сколько начислений и выплат, граждан, просрочек, сумм в бюджет и из бюджета,
+    разбивка по типам услуг."""
     return _j(tools.summary())
 
 
 @function_tool
-def find_anomalies(z: float = 3.0, limit: int = 10) -> str:
-    """Найти подозрительные транзакции, сильно выбивающиеся из обычных трат клиента.
+def find_anomalies(limit: int = 10) -> str:
+    """Записи, требующие проверки: дубли выплат, длинные просрочки, необычные отказы. У каждой указана причина.
 
     Args:
-        z: Порог z-score (чем больше, тем строже). Обычно 2.5-4.
-        limit: Сколько транзакций вернуть.
+        limit: Сколько записей вернуть.
     """
-    return _j(tools.find_anomalies(z, limit))
+    return _j(tools.find_anomalies(limit))
 
 
 @function_tool
-def client_profile(client_id: str) -> str:
-    """Профиль клиента: город, траты, топ категорий, подозрительные операции.
+def citizen_profile(iin: str) -> str:
+    """Всё по одному человеку: начисления, выплаты, просрочки и спорные записи.
 
     Args:
-        client_id: ID клиента вида C001.
+        iin: ИИН из 12 цифр, например 990007300007.
     """
-    return _j(tools.client_profile(client_id))
+    return _j(tools.citizen_profile(iin))
 
 
 @function_tool
-def search_transactions(category: str | None = None, city: str | None = None,
-                        min_amount: int = 0, limit: int = 20) -> str:
-    """Поиск транзакций по категории, городу и минимальной сумме (самые крупные первыми).
+def search_payments(service_type: str | None = None, region: str | None = None, status: str | None = None,
+                    min_amount: int = 0, limit: int = 20) -> str:
+    """Поиск начислений и выплат (самые крупные первыми).
 
     Args:
-        category: Категория, например "Переводы" или "АЗС".
-        city: Город, например "Алматы".
+        service_type: Налог, Пошлина, Штраф, Пособие или Субсидия.
+        region: Регион, например "Алматы" или "Туркестанская".
+        status: Оплачено, Просрочено, Ожидает оплаты, Назначено, Отказано, На рассмотрении.
         min_amount: Минимальная сумма в тенге.
         limit: Сколько вернуть.
     """
-    return _j(tools.search_transactions(category, city, min_amount, limit))
+    return _j(tools.search_payments(service_type, region, status, min_amount, limit))
+
+
+@function_tool
+def refusal_rates() -> str:
+    """Доля отказов по выплатам в разрезе регионов: где людям отказывают чаще всего."""
+    return _j(tools.refusal_rates())
 
 
 @function_tool
@@ -76,7 +89,7 @@ def query_data(where: str | None = None, group_by: str | None = None, value_colu
     """Универсальный запрос к активным данным: фильтр, группировка, агрегат. Работает с любым датасетом.
 
     Args:
-        where: Условие в синтаксисе pandas, например `amount_kzt > 100000 and city == "Алматы"`.
+        where: Условие в синтаксисе pandas, например `amount_kzt > 100000 and region == "Алматы"`.
         group_by: Колонка для группировки.
         value_column: Числовая колонка для агрегата. Без неё считается количество строк.
         agg: sum, mean, count, min, max, median или nunique.
@@ -92,7 +105,7 @@ def find_outliers(value_column: str, group_column: str | None = None, z: float =
 
     Args:
         value_column: Числовая колонка, например сумма.
-        group_column: Считать отклонение внутри группы, например по клиенту.
+        group_column: Считать отклонение внутри группы, например по региону.
         z: Порог, обычно 2.5-4.
         limit: Сколько вернуть.
     """
@@ -100,9 +113,9 @@ def find_outliers(value_column: str, group_column: str | None = None, z: float =
 
 
 agent = Agent(
-    name="FinAnalyst",
+    name="GovFinAssistant",
     instructions=INSTRUCTIONS,
-    tools=[get_summary, find_anomalies, client_profile, search_transactions,
+    tools=[get_summary, find_anomalies, citizen_profile, search_payments, refusal_rates,
            dataset_info, query_data, find_outliers],
     model=MODEL,
 )
@@ -111,10 +124,12 @@ agent = Agent(
 def _mock(error: str | None = None) -> dict:
     """Фолбэк без ключа/интернета: демо не падает, а честно показывает реальные цифры."""
     s = tools.summary()
-    top = next(iter(s["by_category"]))
+    a = tools.find_anomalies(1)
     n = lambda x: f"{x:,}".replace(",", " ")  # noqa: E731
-    reply = (f"Демо-режим (без LLM). В базе {n(s['transactions'])} транзакций на {n(s['total_kzt'])} ₸, "
-             f"помечено подозрительных: {s['flagged']}. Больше всего тратят на «{top}».")
+    reply = (f"Демо-режим (без LLM). В базе {n(s['documents'])} начислений и выплат по {s['citizens']} гражданам, "
+             f"просрочено {s['overdue']}, на проверку помечено {s['flagged']}.")
+    if a:
+        reply += f" Например: {a[0]['service']} на {n(a[0]['amount_kzt'])} ₸ — {a[0]['flag_reason']}."
     trace = [{"tool": "get_summary", "args": "{}"}]
     if error:
         trace.append({"tool": "error", "args": error[:300]})

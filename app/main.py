@@ -26,8 +26,13 @@ def summary():
 
 
 @app.get("/api/anomalies")
-def anomalies(z: float = 3.0, limit: int = 10):
-    return tools.find_anomalies(z, limit)
+def anomalies(limit: int = 10):
+    return tools.find_anomalies(limit)
+
+
+@app.get("/api/refusals")
+def refusals():
+    return tools.refusal_rates()
 
 
 @app.get("/api/dataset")
