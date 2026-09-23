@@ -30,6 +30,9 @@
     .chat-line.assistant { background: #f2f6fa; color: #17263d; }
     .chat-line.user { background: #0f766e; color: white; margin-left: 12%; }
     .flow-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; border-bottom: 1px solid #e7edf3; padding: 8px 0; align-items: start; }
+    .view-button { border: 1px solid #cbd5e1; background: #fff; color: #1e293b; }
+    .view-button:hover { background: #f1f5f9; }
+    .view-button.active, .view-button.active:hover { border-color: #1e293b; background: #1e293b; color: #fff; }
     @media (max-width: 1024px) { #network { height: 520px; } }
   </style>
 </head>
@@ -91,8 +94,8 @@
             <p id="graphCount" class="text-sm text-slate-600">Загружаю граф…</p>
           </div>
           <div class="flex gap-2">
-            <button id="showTop" class="border border-slate-300 hover:bg-slate-100 px-3 py-2 rounded-lg font-semibold">Топ-150</button>
-            <button id="showAll" class="bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-lg font-semibold">Вся сеть</button>
+            <button id="showTop" class="view-button px-3 py-2 rounded-lg font-semibold" aria-pressed="false">Топ-150</button>
+            <button id="showAll" class="view-button px-3 py-2 rounded-lg font-semibold" aria-pressed="false">Вся сеть</button>
           </div>
         </div>
         <div class="grid sm:grid-cols-[minmax(0,1fr)_auto_auto] gap-2 mb-3">
@@ -172,7 +175,7 @@ const state = {graph: null, nodeMap: new Map(), neighbors: new Map(), network: n
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt = (n) => Number(n ?? 0).toLocaleString('ru-RU', {maximumFractionDigits: 2});
 const money = (n) => Math.round(Number(n ?? 0)).toLocaleString('ru-RU') + ' ₸';
-const score = (n) => Number(n ?? 0).toFixed(4);
+const score = (n) => Number(n ?? 0).toFixed(2);
 const role = (r) => ROLE[r] || {name: String(r || 'Неизвестно'), color: '#64748b'};
 const status = (id, message, error = false) => { const el = $('#' + id); el.textContent = message; el.className = 'text-sm ' + (error ? 'text-red-700 font-semibold' : 'text-slate-600') + ' mt-2'; };
 const rolePill = (r) => '<span class="role-pill" style="background:' + role(r).color + '1c;color:' + role(r).color + '">' + esc(role(r).name) + '</span>';
@@ -249,6 +252,11 @@ function graphEdge(e) {
 function renderGraph(ids, view) {
   if (!state.graph) return;
   state.view = view;
+  for (const [buttonId, mode] of [['showTop', 'top'], ['showAll', 'all']]) {
+    const active = view === mode;
+    $('#' + buttonId).classList.toggle('active', active);
+    $('#' + buttonId).setAttribute('aria-pressed', String(active));
+  }
   const selected = new Set(ids);
   const nodes = state.graph.nodes.filter((n) => selected.has(n.id));
   const edges = state.graph.edges.filter((e) => selected.has(e.from) && selected.has(e.to));
@@ -369,6 +377,9 @@ function flowTable(title, rows, empty) {
 function renderCard(d) {
   const m = d.metrics || {};
   const gaps = Array.isArray(d.gaps) ? d.gaps : [];
+  const passThrough = m.truncated === true ? 'неизвестно (обрыв 4-го колена)' :
+    Number(m.pass_through) === -1 ? 'нет входящих' : Math.round(Number(m.pass_through || 0) * 100) + '%';
+  const anomalyFlags = Array.isArray(m.anomaly_flags) ? m.anomaly_flags.filter(Boolean).join('; ') : String(m.anomaly_flags || '');
   $('#nodeCard').innerHTML =
     '<div class="flex flex-wrap gap-2 items-center">' + rolePill(d.role) + '<span class="font-bold text-teal-800">Ранг #' + esc(d.rank) + '</span></div>' +
     '<div class="text-xl font-black break-all mt-2">' + esc(d.gid) + '</div>' +
@@ -380,10 +391,11 @@ function renderCard(d) {
     '<div class="grid grid-cols-2 gap-2 mt-3">' +
       metric('Входящих связей', fmt(m.in_deg)) + metric('Исходящих связей', fmt(m.out_deg)) +
       metric('Получил', money(m.in_kzt)) + metric('Отправил', money(m.out_kzt)) +
-      metric('Сквозной поток', Number(m.pass_through) === -1 ? 'нет входящих' : score(m.pass_through)) +
-      metric('Быстрые переводы', fmt(Number(m.fast_share || 0) * 100) + ' %') +
+      metric('Отдал дальше', passThrough) +
+      metric('Ушло за ≤2 дня после поступления', Math.round(Number(m.fast_share || 0) * 100) + '%') +
       metric('Циклы', fmt(m.cycles)) + metric('Seed за 2 шага', fmt(m.seeds_2hop)) +
     '</div>' +
+    (Number(m.anomaly_count || 0) > 0 ? '<div class="bg-rose-50 border-l-4 border-rose-600 p-3 rounded-r-lg mt-4"><h3 class="font-bold text-rose-900">Аномалии (правила)</h3><p class="text-sm text-rose-900 mt-1">' + esc(anomalyFlags || 'Обнаружены признаки по правилам.') + '</p></div>' : '') +
     '<div class="mt-4"><h3 class="font-bold">Чего не хватает в данных</h3>' +
       (gaps.length ? '<ul class="list-disc pl-5 text-sm text-slate-700 mt-1 space-y-1">' + gaps.map((g) => '<li>' + esc(g) + '</li>').join('') + '</ul>' : '<p class="text-sm text-slate-600 mt-1">Дополнительные пробелы не отмечены.</p>') + '</div>' +
     flowTable('Получил от', d.in || [], 'Входящих связей в выгрузке нет.') +
