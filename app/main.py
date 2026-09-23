@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -104,6 +105,12 @@ def dataset_reset():
 @app.post("/api/chat")
 async def chat(body: Chat):
     return await ask(body.messages)
+
+
+@app.get("/", include_in_schema=False)
+def root():
+    # главный экран — web/graph.html; когда будет готов новый index.html, убрать этот маршрут
+    return RedirectResponse("/graph.html")
 
 
 app.mount("/", StaticFiles(directory=Path(__file__).resolve().parent.parent / "web", html=True), name="web")
