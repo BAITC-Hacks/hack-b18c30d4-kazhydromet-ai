@@ -69,6 +69,17 @@ def routes(gid: str | None = None, limit: int = 10):
     return graph.repeated_routes(gid, limit)
 
 
+@app.get("/api/timeline/{gid}")
+def timeline(gid: str):
+    """Наблюдаемые переводы клиента по календарным дням."""
+    from .timeline import node_timeline
+
+    result = node_timeline(gid)
+    if "error" in result:
+        raise HTTPException(404, result["error"])
+    return result
+
+
 @app.post("/api/recompute")
 def recompute():
     """Полный пересчёт от сырых parquet до выгрузок."""
