@@ -165,6 +165,8 @@ def assign_role(r) -> tuple[str, float, str]:
         score = min(1.0, 0.45 + 0.05 * r.in_deg + (0.1 if r.max_payers_day >= T["sync_payers"] else 0))
         sync = f"; до {r.max_payers_day} плательщиков в один день" if r.max_payers_day >= 2 else ""
         tail = f", {pt_txt}" if pt_txt else ""
+        if r.truncated:  # 4-е колено: сбор виден, а что стало с деньгами дальше — нет
+            tail = "; 4-е колено: исходящие не выгружались"
         return "consolidator", score, (
             f"{seed_note}получает от {r.in_deg} разных плательщиков ({r.in_tx} переводов, {kzt(r.in_kzt)}){tail}{sync}")
 
@@ -185,14 +187,15 @@ def assign_role(r) -> tuple[str, float, str]:
 
     if r.in_deg > 0 and pd.notna(pt) and pt < T["keep_pt"] and not r.is_seed:
         return "terminal", 0.55, (
-            f"получил {kzt(r.in_kzt)} от {r.in_deg} плательщ., {pt_txt} — удерживает средства")
+            f"получил {kzt(r.in_kzt)} от {r.in_deg} плательщ., дальше ушло лишь {kzt(r.out_kzt)} "
+            f"({pt:.0%}, {r.out_deg} получ.) — удерживает большую часть")
 
     if r.out_deg > 0:
         fast = f"; {r.fast_share:.0%} суммы ушло за ≤{T['fast_days']} дня после поступления" \
             if r.fast_share > 0 else ""
         if r.is_seed:
             return "transit", 0.45, (
-                f"seed (входящие вне выгрузки): переслал {kzt(r.out_kzt)} {r.out_deg} получ.{fast}")
+                f"seed: отправил {kzt(r.out_kzt)} {r.out_deg} получ.; входящие вне выгрузки — роль по исходящим{fast}")
         if pd.notna(pt) and T["transit_pt_lo"] <= pt <= T["transit_pt_hi"]:
             score = min(1.0, 0.55 + 0.4 * r.fast_share - 0.2 * abs(1 - pt))
             return "transit", score, (
@@ -349,7 +352,7 @@ def run(data_dir: Path, out_dir: Path) -> dict:
 
     resil = resilience(G, df.gid.tolist())
     graph = {
-        "nodes": [{"id": str(r.gid), "role": r.role, "cluster": int(r.cluster_id),
+        "nodes": [{"id": str(r.gid), "label": str(r.gid)[-10:], "role": r.role, "cluster": int(r.cluster_id),
                    "priority": float(r.priority_score), "is_seed": bool(r.is_seed), "depth": int(r.depth),
                    "truncated": bool(r.truncated), "in_core": bool(r.in_core), "in_kzt": float(r.in_kzt), "out_kzt": float(r.out_kzt),
                    "evidence": r.evidence} for r in df.itertuples()],

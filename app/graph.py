@@ -87,14 +87,17 @@ def gaps(r) -> list[str]:
 
 def graph_json() -> dict:
     import json
+    _state()  # построит out/, если его ещё нет
     return json.loads((OUT / "graph.json").read_text(encoding="utf-8"))
 
 
 def top(n: int = 20, role: str | None = None) -> list[dict]:
-    df = _state()[0]
-    d = df[df.role == role] if role else df
-    d = d.sort_values("priority_score", ascending=False).head(n)
-    return [{**_brief(g), "rank": i + 1, "evidence": r.evidence} for i, (g, r) in enumerate(d.iterrows())]
+    """rank — глобальный (по всем 2 248 узлам), даже при фильтре по роли."""
+    df = _state()[0].sort_values("priority_score", ascending=False)
+    df = df.assign(rank=range(1, len(df) + 1))
+    d = (df[df.role == role] if role else df).head(n)
+    return [{**_brief(g), "rank": int(r["rank"]), "evidence": r.evidence,
+             "why": pipeline.why(r.rename(g))} for g, r in d.iterrows()]
 
 
 def clusters(limit: int = 100) -> list[dict]:
@@ -115,7 +118,7 @@ def cluster_detail(cluster_id: int, limit: int = 15) -> dict:
 def common_receivers(gids: list, max_hops: int = 3, limit: int = 10) -> dict:
     """Кто ниже по потоку собирает деньги сразу от нескольких заданных узлов (в пределах max_hops переводов)."""
     G = _state()[3]
-    ok = [g for g in (_gid(x) for x in gids) if g is not None]
+    ok = list(dict.fromkeys(g for g in (_gid(x) for x in gids) if g is not None))  # без повторов
     missing = [str(x) for x in gids if _gid(x) is None]
     reach: dict[int, list] = {}
     for g in ok:
@@ -141,9 +144,31 @@ def money_path(src, dst, max_len: int = 6) -> dict:
         return {"src": str(a), "dst": str(b), "paths": [], "note": "направленного пути денег нет"}
     if len(paths[0]) - 1 > max_len:
         return {"src": str(a), "dst": str(b), "paths": [], "note": f"путь длиннее {max_len} шагов"}
-    return {"src": str(a), "dst": str(b), "paths": [
-        [{**_brief(u), "next_sum_kzt": G[u][v]["sum_kzt"]} for u, v in zip(p, p[1:])] + [_brief(p[-1])]
-        for p in paths]}
+    tx = _state()[4]
+    out = []
+    for p in paths:
+        steps = [{**_brief(u), "next_sum_kzt": G[u][v]["sum_kzt"]} for u, v in zip(p, p[1:])] + [_brief(p[-1])]
+        dates = _chronology(tx, p)
+        out.append({"steps": steps, "chronology_ok": dates is not None,
+                    "dates": [d.strftime("%d.%m.%Y") for d in dates] if dates else None})
+    note = ("есть цепочка переводов с неубывающими датами — деньги могли пройти этим маршрутом"
+            if any(x["chronology_ok"] for x in out) else
+            "связь только структурная: по датам переводов деньги не могли пройти этим маршрутом в июле")
+    return {"src": str(a), "dst": str(b), "paths": out, "note": note}
+
+
+def _chronology(tx: pd.DataFrame, p: list[int]):
+    """Жадно подбирает по каждому шагу самый ранний перевод не раньше предыдущего. None — маршрут невозможен по датам."""
+    prev, dates = None, []
+    for u, v in zip(p, p[1:]):
+        d = tx[(tx.src == u) & (tx.dst == v)].date
+        if prev is not None:
+            d = d[d >= prev]
+        if d.empty:
+            return None
+        prev = d.min()
+        dates.append(prev)
+    return dates
 
 
 def overview() -> dict:

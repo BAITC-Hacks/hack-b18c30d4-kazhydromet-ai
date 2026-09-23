@@ -118,10 +118,19 @@ def _mock(error: str | None = None, messages: list[dict] | None = None) -> dict:
     q = (messages or [{}])[-1].get("content", "") if messages else ""
     gids = re.findall(r"\d{18}", q)
     n = lambda x: f"{x:,.0f}".replace(",", " ")  # noqa: E731
-    if len(gids) >= 2:
+    if len(gids) == 2 and re.search(r"пут|маршрут|как .*дош|от .* к |path|route", q, re.I):
+        r = graph.money_path(gids[0], gids[1])
+        if r.get("paths"):
+            best = next((x for x in r["paths"] if x["chronology_ok"]), r["paths"][0])
+            chain = " → ".join(f"{s['gid']} ({s['role_ru']})" for s in best["steps"])
+            reply = f"Демо-режим (без LLM). Путь денег: {chain}. {r['note']}."
+        else:
+            reply = f"Демо-режим (без LLM). {r.get('note') or r.get('error')}."
+        trace = [{"tool": "money_path", "args": json.dumps({"src": gids[0], "dst": gids[1]})}]
+    elif len(gids) >= 2:
         r = graph.common_receivers(gids)
         rows = r["common_receivers"][:3]
-        reply = "Демо-режим (без LLM). " + ("; ".join(
+        reply = "Демо-режим (без LLM). Кто собирает деньги с этих клиентов: " + ("; ".join(
             f"{x['gid']} ({x['role_ru']}) получает деньги от {x['reached_from']} из {len(r['input'])}"
             for x in rows) or "Общих получателей в пределах 3 переводов нет") + "."
         trace = [{"tool": "common_receivers", "args": json.dumps({"gids": gids})}]
