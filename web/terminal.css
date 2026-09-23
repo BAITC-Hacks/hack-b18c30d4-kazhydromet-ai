@@ -340,3 +340,4 @@ footer, footer a { color: #566f7f; font-size: 12px; }
   .review-buttons .button { font-size: 13px; }
   footer, footer a { font-size: 12px; }
 }
+@media(max-width:760px){.chat-panel{scroll-margin-top:75px}}

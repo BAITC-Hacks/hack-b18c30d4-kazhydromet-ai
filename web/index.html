@@ -10,6 +10,8 @@
 <link rel="stylesheet" href="/terminal.css">
 <link rel="stylesheet" href="/flows.css">
 <link rel="stylesheet" href="/coverage.css">
+<link rel="stylesheet" href="/scenarios.css">
+<link rel="stylesheet" href="/report-actions.css">
 </head>
 <body>
 <nav class="rail" aria-label="Основная навигация">
@@ -79,7 +81,26 @@ const hints=[
  {label:'Объясни роль клиента',question:()=>(state.selected||state.topRows[0]?.gid)?'Объясни роль клиента '+(state.selected||state.topRows[0].gid)+' простыми словами. Какие факты и чего не хватает?':'Какие правила используются для назначения ролей?'},
  {label:'Найди общих получателей',question:()=>state.topRows.length>=2?'Кто собирает деньги с этих клиентов: '+state.topRows.slice(0,5).map(r=>r.gid).join(', ')+'?':'Кто собирает деньги сразу от нескольких известных следствию клиентов?'}
 ];
-async function getJSON(url,options){const response=await fetch(url,options);if(!response.ok){let detail='';try{const payload=await response.json();detail=typeof payload.detail==='string'?payload.detail:'';}catch(_){}throw new Error(detail||'HTTP '+response.status);}return response.json();}
+const failedLoads=new Set();
+const dataURLs=new Set(['/api/overview','/api/top?n=50','/api/graph','/api/clusters','/api/health']);
+function updateRecovery(){
+ let box=$('#dataRecovery');
+ if(!box){box=document.createElement('div');box.id='dataRecovery';box.className='status error';box.setAttribute('role','status');box.innerHTML='<span>Часть данных не загрузилась. Проверьте соединение с сервером. </span><button class="button small" type="button">Повторить загрузку</button>';$('#overviewStatus').after(box);box.querySelector('button').addEventListener('click',reloadData);}
+ box.hidden=failedLoads.size===0;
+}
+async function getJSON(url,options={}){
+ const controller=new AbortController();
+ const timeout=setTimeout(()=>controller.abort(),url==='/api/recompute'?320000:url==='/api/chat'?35000:15000);
+ const signal=options.signal?AbortSignal.any([controller.signal,options.signal]):controller.signal;
+ try{const response=await fetch(url,{...options,signal});if(!response.ok){let detail='';try{const payload=await response.json();detail=typeof payload.detail==='string'?payload.detail:'';}catch(_){}throw new Error(detail||'HTTP '+response.status);}const data=await response.json();if(dataURLs.has(url)){failedLoads.delete(url);updateRecovery();}return data;}
+ catch(e){if(dataURLs.has(url)){failedLoads.add(url);updateRecovery();}throw controller.signal.aborted?new Error('Сервер не ответил вовремя. Повторите запрос.'):e;}
+ finally{clearTimeout(timeout);}
+}
+async function reloadData(){
+ const button=$('#dataRecovery button');if(button){button.disabled=true;button.textContent='Загружаю…';}
+ await Promise.allSettled([loadOverview(),loadTop(),loadGraph(),loadClusters(),loadHealth()]);
+ if(button){button.disabled=false;button.textContent='Повторить загрузку';}window.dispatchEvent(new Event('aml:ready'));
+}
 async function loadOverview(){status('overviewStatus','Загружаю показатели…');try{const d=await getJSON('/api/overview');$('#kpiNodes').textContent=fmt(d.nodes);$('#kpiCoordinators').textContent=fmt(d.roles?.coordinator);$('#kpiAnomalies').textContent=fmt(d.anomalies);$('#introLine').textContent=fmt(d.seeds)+' известный клиент → '+fmt(d.nodes)+' связанных. Ниже — кого проверить первым и почему';status('overviewStatus','');}catch(e){status('overviewStatus','Показатели недоступны: '+e.message,true);}}
 async function loadHealth(){try{const h=await getJSON('/api/health');const label=$('.ai-label');label.textContent=h.live?'AI · '+(h.provider==='nvidia'?'NVIDIA':'OpenAI'):'Ответы по графу';label.title=h.live?'Ответы через серверный AI; доступность проверяется при запросе':'Локальные ответы по рассчитанным данным';if(h.public_demo){$('#recompute').disabled=true;$('#recompute').textContent='Выгрузка июля 2026';$('#recompute').title='Пересчёт выполняется при запуске сервера';$('.connection').textContent='Общее демо';}}catch(e){$('.ai-label').textContent='Статус AI недоступен';}}
 function renderTop(){const rows=state.topRows.slice(0,state.visibleTop);$('#topList').innerHTML=rows.map(r=>'<button class="top-row'+(r.gid===state.selected?' active':'')+'" data-gid="'+esc(r.gid)+'"><span class="row-line"><span class="rank">'+esc(r.rank)+'</span><span class="short-gid" title="'+esc(r.gid)+'">'+esc(shortGid(r.gid))+'</span>'+(window.reviewList?.has(r.gid)?'<span class="row-selected" title="В перечне на проверку">✓</span>':'')+'</span><span class="row-role" style="color:'+role(r.role).color+'">'+esc(role(r.role).name)+'</span><span class="row-plain">'+esc(r.plain||'Откройте карточку для объяснения роли')+'</span></button>').join('');$('#showMore').hidden=state.visibleTop>=state.topRows.length;status('topStatus',rows.length?'Показано '+rows.length+' из '+state.topRows.length+' приоритетных клиентов':'Список пока пуст. Выполните пересчёт.');}
@@ -139,18 +160,19 @@ function linkedReply(reply){return esc(reply).replace(/(^|[^\d])(\d{18})(?!\d)/g
 function appendChat(kind,content){const el=document.createElement('div');el.className='chat-line '+kind;el.innerHTML=content;$('#chatLog').append(el);$('#chatLog').scrollTop=$('#chatLog').scrollHeight;return el;}
 async function sendChat(question, useContext=true){
  if(!question||state.chatBusy)return;
- // Explicit identifiers and network-wide questions take precedence over the open card.
- const context=useContext&&state.chatContext&&!/\d{18}/.test(question)&&!/кого|топ|приоритет|обзор|всей сети|всей сети|общая сеть/i.test(question)?state.chatContext:'';
- const content=context?'Выбранный клиент: '+context+'\nВопрос аналитика: '+question:question;
+ // Context is separate data; explicit identifiers/dates in the question have precedence.
+ const context={review_gids:window.reviewList?.read()||[]};
+ if(useContext&&state.chatContext){context.selected_gid=state.chatContext;if(window.moneyTimeline?.active&&window.moneyTimeline.day?.date)context.selected_date=window.moneyTimeline.day.date;}
+ const content=question;
  const messages=[...state.chatMessages.slice(-18),{role:'user',content}];
  state.chatBusy=true;$('#chatSend').disabled=true;
  document.querySelectorAll('.hint').forEach(b=>b.disabled=true);
- appendChat('user',esc(question)+(context?'<div class="small">Клиент '+esc(context)+'</div>':''));
+ appendChat('user',esc(question)+(context.selected_gid?'<div class="small">Контекст: '+esc(context.selected_gid)+(context.selected_date?' · '+esc(context.selected_date.split('-').reverse().join('.')):'')+'</div>':''));
  const answer=appendChat('assistant','Агент изучает данные…');
  answer.classList.add('pending');
  status('chatStatus','Проверяю факты в графе. Ответ может занять несколько секунд.');
  try{
-  const d=await getJSON('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages})});
+  const d=await getJSON('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages,context})});
   state.chatMessages.push({role:'user',content},{role:'assistant',content:d.reply||'Ответ пуст.'});
   state.chatMessages=state.chatMessages.slice(-18);
   const trace=Array.isArray(d.trace)?d.trace:[];
@@ -191,11 +213,14 @@ window.addEventListener('aml:review',event=>{const selected=new Set(event.detail
 renderLegend();
 $('#hints').innerHTML=hints.map((h,i)=>'<button class="hint" data-hint="'+i+'">'+esc(h.label)+'</button>').join('');
 $('#hints').addEventListener('click',e=>{const b=e.target.closest('[data-hint]');if(b)sendChat(hints[Number(b.dataset.hint)].question(),false);});
-Promise.allSettled([loadOverview(),loadTop(),loadGraph(),loadClusters(),loadHealth()]).then(()=>window.dispatchEvent(new Event('aml:ready')));
+reloadData();
 </script>
 <script src="/review-list.js"></script>
 <script src="/timeline.js"></script>
 <script src="/flows.js"></script>
 <script src="/coverage.js"></script>
+<script src="/scenarios.js"></script>
+<script src="/report-actions.js"></script>
+<script src="/chat-context.js"></script>
 </body>
 </html>

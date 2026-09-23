@@ -1,0 +1,10 @@
+.review-buttons{flex-wrap:wrap;justify-content:flex-start;gap:9px}
+.review-buttons #reviewClear{margin-right:auto}
+.review-buttons .report-preview{font-size:14px;padding:10px 13px}
+.review-buttons #reviewDownload{background:#fff;color:#315565;border-color:#bfcfd8;font-size:12px;padding:10px 11px}
+.review-buttons #reviewDownload:hover{background:#eaf1f4;border-color:#92acb9}
+.report-preview:focus-visible,.node-report-preview:focus-visible{outline:3px solid #238f7a;outline-offset:3px}
+.node-report-preview{color:#165b4b;background:#eaf5f0;border-color:#add0c1;font-size:13px}
+.node-report-preview:hover{background:#dcefe5;border-color:#77ad96}
+.node-report-preview+.node-report{margin-top:8px}
+@media(max-width:760px){.review-buttons .report-preview{order:-1;width:100%;justify-content:center}.review-buttons #reviewClear{margin-right:auto}.review-buttons #reviewDownload{font-size:12px;white-space:normal}.node-report-preview{font-size:13px}}

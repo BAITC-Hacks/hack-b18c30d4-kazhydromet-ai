@@ -15,6 +15,10 @@
 
 Codex: отчёт /api/report готов
 
+Codex, 23.09.2026 17:19: печатный HTML-отчёт и PDF через браузер, 3 динамических сценария входа, подсказки AI по текущему дню/перечню, восстановление загрузки после ошибки готовы. 8 инструментов AI, 44 проверки mock/SDK, 32 браузерных проверки контекста, 19 отчёта, 20 сценариев; live OpenAI daily_transfers — 5,53 с с правильными суммами. Gate analyst-release: pipeline 4,0 с, validator 21/21 OK (3,94 с), health 200. scripts/smoke_api.py: 24/24 OK без ключа. Форма Astana Hub заполнена, пока не отправлена; PRIVATE-репозиторий управляется организатором для проверки, после 18:00 push блокируется. Финальный Linux-запуск продолжается.
+
+Codex, 23.09.2026 17:07: следующий проверяемый этап — печатный HTML `/api/report/view?top=&gids=`, AI-инструменты `daily_transfers` и `review_scope`. `/api/chat` сохраняет messages, получает необязательный context: `selected_gid`, `selected_date` (ISO), `review_gids` (до 100). Явные gid/даты вопроса важнее контекста. Root: main/report_html/экспорт/контекст; review_list: agent.py; polish_audit: coverage.js/css; backup_fix: чистая Ubuntu-установка. Роли не меняются.
+
 Codex, 23.09.2026 16:53: «Что даст следующая проверка» готово: `GET /api/review-coverage?gids=a,b` — объединение видимых транзакций без двойного счёта и следующий кандидат из топ-50. Пустой перечень начинает с первого по приоритету; роли/приоритет не меняются. Файлы: `app/coverage.py`, API в main.py, `web/coverage.js/css`, охват в report.py. 10 проверок расчёта, 12 браузерных, 4 HTTP; gate 21/21 OK (4,33 с). NVIDIA не используем; действующий AI — OpenAI. Самостоятельная проверка: `docs/JURY-CHECK.md` и `docs/VALIDATION.txt`.
 
 Контракт расширен: `/api/health` сохраняет `ok/model/live`, добавляет `provider/config_error/public_demo`. При `PUBLIC_DEMO=1` изменяющие выгрузку POST возвращают 403; чат ограничен 2 одновременными запросами и 20 запросами в минуту на процесс, история — 24 000 символов. Локальный режим прежний. Роли и расчёт не меняются.

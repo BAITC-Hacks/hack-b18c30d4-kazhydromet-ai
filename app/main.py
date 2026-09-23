@@ -3,12 +3,12 @@ import asyncio
 from collections import deque
 from pathlib import Path
 from time import monotonic
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 from . import dataset, graph, tools
 from .agent import CONFIG_ERROR, LIVE, MODEL, PROVIDER, ask
@@ -32,8 +32,18 @@ class ChatMessage(BaseModel):
     content: str = Field(strict=True, min_length=1)
 
 
+Gid = Annotated[str, StringConstraints(strict=True, pattern=r"^[0-9]{18}$")]
+
+
+class ChatContext(BaseModel):
+    selected_gid: Gid | None = None
+    selected_date: str | None = Field(default=None, strict=True, pattern=r"^2026-07-(0[1-9]|[12][0-9]|3[01])$")
+    review_gids: list[Gid] | None = Field(default=None, max_length=100)
+
+
 class Chat(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=50)
+    context: ChatContext | None = None
 
 
 @app.get("/api/health")
@@ -142,8 +152,9 @@ def dataset_reset():
 @app.post("/api/chat")
 async def chat(body: Chat):
     messages = [message.model_dump() for message in body.messages]
+    context = body.context.model_dump(exclude_none=True) if body.context else None
     if not PUBLIC_DEMO:
-        return await ask(messages)
+        return await ask(messages, context=context)
     if sum(len(message.content) for message in body.messages) > 24000:
         raise HTTPException(413, "Слишком длинная история. Начните новый диалог.")
     now = monotonic()
@@ -153,7 +164,7 @@ async def chat(body: Chat):
         raise HTTPException(429, "AI сейчас занят. Повторите вопрос через минуту.", headers={"Retry-After": "60"})
     _chat_times.append(now)
     async with _chat_slots:
-        return await ask(messages)
+        return await ask(messages, context=context)
 
 
 @app.get("/api/report")
@@ -169,6 +180,24 @@ def analyst_report(top: int = 10, gids: str | None = None):
         media_type="text/markdown; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=aml_report.md"},
     )
+
+
+@app.get("/api/report/view")
+def analyst_report_view(top: int = 10, gids: str | None = None):
+    """Печатная HTML-версия того же Markdown-перечня; работает без внешних ресурсов."""
+    from fastapi.responses import HTMLResponse
+
+    from .report_html import build_html_report
+
+    selected = [gid.strip() for gid in gids.split(",") if gid.strip()] if gids is not None else None
+    if (gids is not None and len(gids) > 2000) or (selected is not None and len(set(selected)) > 100):
+        raise HTTPException(422, "Допустимо не более 100 клиентов в перечне.")
+    if not 1 <= top <= 100:
+        raise HTTPException(422, "Размер перечня должен быть от 1 до 100.")
+    return HTMLResponse(build_html_report(selected, top), headers={
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'self'",
+        "X-Content-Type-Options": "nosniff",
+    })
 
 
 @app.get("/api/review-coverage")
