@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Граф денег — AML-анализ</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <script src="/vendor/tailwind.js"></script>
+  <script src="/vendor/vis-network.min.js"></script>
   <style>
     :root { color-scheme: light; }
     body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -45,6 +45,7 @@
       </div>
       <div class="flex flex-wrap items-center gap-3">
         <span class="text-slate-300 text-sm">Данные: июль 2026</span>
+        <a href="/api/report?top=20" download="aml_report.md" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-5 py-2.5 rounded-xl">Перечень на проверку (.md)</a>
         <button id="recompute" class="bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold px-5 py-2.5 rounded-xl">Пересчитать</button>
       </div>
     </div>
@@ -115,7 +116,7 @@
         <div id="graphStatus" class="text-sm text-slate-600 mb-2" role="status">Загружаю сеть…</div>
         <div id="network" aria-label="Направленный граф транзакций"></div>
         <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm mt-3" id="legend"></div>
-        <p class="text-xs sm:text-sm text-slate-600 mt-3">Стрелка показывает направление перевода. Размер узла — приоритет, толщина связи — сумма. Чёрная рамка — исходный клиент, золотая — ядро, пунктир — граница выгрузки.</p>
+        <p class="text-sm text-slate-700 mt-3">Стрелка показывает направление перевода. Размер узла — приоритет, толщина связи — сумма. Чёрная рамка — исходный клиент (seed), золотая — кольцо возвратных потоков (in_core), пунктир — обрыв 4-го колена (truncated).</p>
       </section>
 
       <aside class="space-y-4 lg:col-span-2 xl:col-span-1">
@@ -170,7 +171,7 @@ const hints = [
 const state = {graph: null, nodeMap: new Map(), neighbors: new Map(), network: null, selected: '', view: 'top', cluster: '', chatBusy: false};
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt = (n) => Number(n ?? 0).toLocaleString('ru-RU', {maximumFractionDigits: 2});
-const money = (n) => fmt(n) + ' ₸';
+const money = (n) => Math.round(Number(n ?? 0)).toLocaleString('ru-RU') + ' ₸';
 const score = (n) => Number(n ?? 0).toFixed(4);
 const role = (r) => ROLE[r] || {name: String(r || 'Неизвестно'), color: '#64748b'};
 const status = (id, message, error = false) => { const el = $('#' + id); el.textContent = message; el.className = 'text-sm ' + (error ? 'text-red-700 font-semibold' : 'text-slate-600') + ' mt-2'; };
@@ -221,30 +222,28 @@ function clusterColor(id) {
   const hue = (Number(id) * 137.508) % 360;
   return 'hsl(' + hue + ', 68%, 45%)';
 }
-function graphNode(n, index, view) {
+function graphNode(n) {
   const c = $('#colorMode').value === 'cluster' ? clusterColor(n.cluster) : role(n.role).color;
-  const border = n.is_seed ? '#111827' : n.in_core ? '#b8860b' : c;
-  const angle = index * 2.399963229728653;
-  const radius = view === 'neighborhood' && n.id === state.selected ? 0 : 28 * Math.sqrt(index + 1);
+  const border = n.is_seed ? '#000000' : n.in_core ? '#d4a017' : c;
   return {
-    id: n.id, label: n.id.slice(-6), x: Math.cos(angle) * radius, y: Math.sin(angle) * radius,
+    id: n.id, label: Number(n.priority || 0) > 0.75 || n.id === state.selected ? n.label : undefined,
     title: esc(n.id) + ' · ' + esc(role(n.role).name) + '<br>' + esc(n.evidence || ''),
-    color: {background: c, border, highlight: {background: c, border: '#0f172a'}},
-    font: {color: '#17263d', size: 11, strokeWidth: 3, strokeColor: '#ffffff'},
-    size: 9 + Math.max(0, Number(n.priority || 0)) * 20,
-    borderWidth: n.is_seed || n.in_core ? 4 : 2, borderWidthSelected: 5,
+    color: {background: c, border, highlight: {background: c, border: '#111111'}},
+    font: {color: '#17263d', size: 12, face: 'ui-monospace', background: 'rgba(255,255,255,.8)'},
+    size: 6 + 26 * Number(n.priority || 0),
+    borderWidth: n.is_seed || n.in_core ? 3 : 1,
     shape: 'dot', shapeProperties: {borderDashes: n.truncated ? [6, 4] : false}
   };
 }
 function graphEdge(e) {
-  const amount = Math.max(0, Number(e.sum_kzt || 0));
+  const amount = Math.max(1, Number(e.sum_kzt || 0));
   return {
     id: e.from + '→' + e.to, from: e.from, to: e.to,
-    arrows: {to: {enabled: true, scaleFactor: 0.65}},
-    width: Math.min(7, 1 + Math.log10(amount + 1) * 0.72),
-    color: {color: '#8b9aab', highlight: '#0f766e', opacity: 0.78},
+    arrows: 'to',
+    width: Math.max(0.5, Math.log10(amount) - 3.3),
+    color: {color: '#94a3b8', highlight: '#0f172a', opacity: 0.7},
     title: money(amount) + ' · ' + fmt(e.n_tx) + ' переводов',
-    smooth: false
+    smooth: {type: 'continuous'}
   };
 }
 function renderGraph(ids, view) {
@@ -254,21 +253,28 @@ function renderGraph(ids, view) {
   const nodes = state.graph.nodes.filter((n) => selected.has(n.id));
   const edges = state.graph.edges.filter((e) => selected.has(e.from) && selected.has(e.to));
   if (state.network) state.network.destroy();
-  if (!window.vis || !vis.Network) { status('graphStatus', 'Не загрузилась библиотека vis-network. Проверьте соединение с CDN.', true); return; }
-  state.network = new vis.Network($('#network'), {nodes: nodes.map((n, i) => graphNode(n, i, view)), edges: edges.map(graphEdge)}, {
+  if (!window.vis || !vis.Network) { status('graphStatus', 'Не загрузилась локальная библиотека vis-network.', true); return; }
+  const network = new vis.Network($('#network'), {nodes: nodes.map(graphNode), edges: edges.map(graphEdge)}, {
     autoResize: true, interaction: {hover: true, navigationButtons: true, keyboard: true},
-    nodes: {chosen: true}, edges: {selectionWidth: 2},
-    physics: view === 'all' ? {enabled: true, stabilization: {enabled: true, iterations: 150, updateInterval: 25}, barnesHut: {gravitationalConstant: -3500, springLength: 75}} : false
+    layout: {improvedLayout: false},
+    nodes: {chosen: true}, edges: {selectionWidth: 2, smooth: {type: 'continuous'}},
+    physics: {enabled: true, solver: 'forceAtlas2Based', forceAtlas2Based: {gravitationalConstant: -40, springLength: 70}, stabilization: {enabled: true, iterations: 250}}
   });
-  state.network.on('click', (params) => { if (params.nodes.length) openNode(String(params.nodes[0])); });
-  if (view === 'all') state.network.once('stabilizationIterationsDone', () => { if (state.network) state.network.setOptions({physics: false}); status('graphStatus', 'Вся сеть размещена; физика выключена.'); });
-  if (view === 'neighborhood' && selected.has(state.selected)) {
-    state.network.once('afterDrawing', () => { if (state.network) { state.network.selectNodes([state.selected]); state.network.focus(state.selected, {scale: 0.7, animation: {duration: 450}}); } });
-  } else if (view !== 'all') {
-    state.network.fit({animation: {duration: 300}});
-  }
+  state.network = network;
+  network.on('click', (params) => { if (params.nodes.length) openNode(String(params.nodes[0])); });
+  network.once('stabilizationIterationsDone', () => {
+    if (state.network !== network) return;
+    network.setOptions({physics: false});
+    if (state.selected && selected.has(state.selected)) {
+      network.selectNodes([state.selected]);
+      network.focus(state.selected, {scale: 1.1, animation: true});
+    } else {
+      network.fit({animation: true});
+    }
+    status('graphStatus', view === 'neighborhood' ? 'Окрестность выбранного узла: 2 шага в обе стороны.' : view === 'cluster' ? 'Показан кластер ' + state.cluster + '.' : view === 'all' ? 'Вся сеть размещена; физика выключена.' : 'Показаны 150 узлов с наибольшим приоритетом.');
+  });
   $('#graphCount').textContent = fmt(nodes.length) + ' узлов · ' + fmt(edges.length) + ' направленных связей';
-  if (view !== 'all') status('graphStatus', view === 'neighborhood' ? 'Окрестность выбранного узла: 2 шага в обе стороны.' : view === 'cluster' ? 'Показан кластер ' + state.cluster + '.' : 'Показаны 150 узлов с наибольшим приоритетом.');
+  status('graphStatus', 'Раскладываю сеть: ' + fmt(nodes.length) + ' узлов…');
   if (!nodes.length) status('graphStatus', 'Узлы для этого режима не найдены.', true);
 }
 function topIds() {
@@ -321,7 +327,9 @@ async function loadGraph() {
       if (state.neighbors.has(e.from)) state.neighbors.get(e.from).add(e.to);
       if (state.neighbors.has(e.to)) state.neighbors.get(e.to).add(e.from);
     });
-    showTop();
+    const linked = state.selected || (/^#\d{18}$/.test(location.hash) ? location.hash.slice(1) : '');
+    if (linked && state.nodeMap.has(linked)) openNode(linked);
+    else showTop();
   } catch (e) { status('graphStatus', 'Не удалось загрузить сеть: ' + e.message, true); $('#graphCount').textContent = 'Граф недоступен'; }
 }
 
@@ -390,6 +398,7 @@ async function openNode(id) {
     if (!state.nodeMap.has(id)) { status('nodeStatus', 'Узел ' + id + ' отсутствует в графе.', true); $('#nodeCard').innerHTML = ''; return; }
     showNeighborhood(id);
   }
+  history.replaceState(null, '', '#' + id);
   status('nodeStatus', 'Загружаю карточку ' + id + '…');
   $('#nodeCard').innerHTML = '';
   try {
@@ -476,6 +485,7 @@ $('#recompute').addEventListener('click', async () => {
   try {
     await getJSON('/api/recompute', {method: 'POST'});
     state.selected = '';
+    history.replaceState(null, '', location.pathname + location.search);
     $('#nodeCard').innerHTML = '';
     status('nodeStatus', 'Данные пересчитаны. Выберите узел.');
     await Promise.all([loadOverview(), loadTop(), loadGraph(), loadClusters()]);
