@@ -1,5 +1,19 @@
-﻿# Запуск: .\run.ps1   -> http://localhost:8000
-if (-not (Test-Path .env)) { Copy-Item .env.example .env; Write-Host "Создан .env - впиши OPENAI_API_KEY" -ForegroundColor Yellow }
-if (-not (Test-Path data\transactions.csv)) { .\.venv\Scripts\python scripts\gen_data.py }
+﻿# Запуск: .\run.ps1 -> пересчёт и http://127.0.0.1:8000
+param([ValidateRange(1, 65535)][int]$Port = 8000)
+
+Set-Location -LiteralPath $PSScriptRoot -ErrorAction Stop
+$python = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
+if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+    Write-Error 'Нет локального Python. Выполните uv venv .venv и uv pip install --python .venv\Scripts\python.exe -r requirements.txt'
+    exit 1
+}
+
+& $python -m app.pipeline
+if ($LASTEXITCODE -ne 0) {
+    Write-Error 'Пересчёт не завершён. Исправьте ошибку выше и повторите запуск.'
+    exit 1
+}
+
 # 127.0.0.1 - сервер виден только с этого ноутбука (в сети хакатона много чужих устройств)
-.\.venv\Scripts\python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+& $python -m uvicorn app.main:app --reload --host 127.0.0.1 --port $Port
+exit $LASTEXITCODE
