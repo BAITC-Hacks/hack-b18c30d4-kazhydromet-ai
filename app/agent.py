@@ -3,27 +3,50 @@ import asyncio
 import json
 import os
 import re
+from urllib.parse import urlsplit
 
 from agents import Agent, ModelSettings, Runner, function_tool, set_tracing_disabled
 from openai.types.shared import Reasoning
 
 from . import graph
 
-# Провайдер LLM: openai (по умолчанию) или nvidia (build.nvidia.com, OpenAI-совместимый API).
-# NVIDIA включается только если в .env есть LLM_PROVIDER=nvidia и NVIDIA_API_KEY, иначе всё как раньше.
-PROVIDER = "nvidia" if os.getenv("LLM_PROVIDER", "").lower() == "nvidia" and os.getenv("NVIDIA_API_KEY") else "openai"
-if PROVIDER == "nvidia":
-    from agents import OpenAIChatCompletionsModel
-    from openai import AsyncOpenAI
+# Явный выбор провайдера никогда не переключает расходы на другого провайдера.
+PROVIDER = os.getenv("LLM_PROVIDER", "openai").strip().lower()
 
-    MODEL = os.getenv("NVIDIA_MODEL", "nvidia/nemotron-3-super-120b-a12b")
-    _MODEL_OBJ = OpenAIChatCompletionsModel(model=MODEL, openai_client=AsyncOpenAI(
-        base_url=os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"),
-        api_key=os.getenv("NVIDIA_API_KEY")))
-else:
-    MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
-    _MODEL_OBJ = MODEL
-LIVE = bool(os.getenv("NVIDIA_API_KEY") if PROVIDER == "nvidia" else os.getenv("OPENAI_API_KEY"))
+
+def _configure_model():
+    """Invalid or incomplete provider settings keep the local graph demo available."""
+    if PROVIDER not in {"openai", "nvidia"}:
+        return "", "gpt-5-mini", False, "LLM_PROVIDER должен быть openai или nvidia"
+    prefix = "NVIDIA" if PROVIDER == "nvidia" else "OPENAI"
+    default = "nvidia/nemotron-3-super-120b-a12b" if PROVIDER == "nvidia" else "gpt-5-mini"
+    model = os.getenv(prefix + "_MODEL", default).strip()
+    if not model:
+        return model, "gpt-5-mini", False, prefix + "_MODEL не должен быть пустым"
+    key = os.getenv(prefix + "_API_KEY", "").strip()
+    if not key:
+        return model, model, False, "Не задан " + prefix + "_API_KEY"
+    if PROVIDER == "openai":
+        return model, model, True, None
+    try:
+        from agents import OpenAIChatCompletionsModel
+        from openai import AsyncOpenAI
+
+        base_url = os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1").strip()
+        parsed = urlsplit(base_url)
+        if (parsed.scheme not in {"https", "http"} or not parsed.hostname
+                or parsed.username is not None or parsed.password is not None
+                or parsed.query or parsed.fragment or any(c.isspace() for c in base_url)):
+            raise ValueError("Invalid provider URL")
+        parsed.port  # Validate a malformed port before creating the client.
+        client = AsyncOpenAI(base_url=base_url, api_key=key, max_retries=0)
+        return model, OpenAIChatCompletionsModel(model=model, openai_client=client), True, None
+    except Exception as error:
+        # Never expose exception text: it can contain a configured URL or credentials.
+        return model, model, False, "Настройка NVIDIA недоступна: " + type(error).__name__
+
+
+MODEL, _MODEL_OBJ, LIVE, CONFIG_ERROR = _configure_model()
 
 # Трейсинг в облако OpenAI на демо не нужен и добавляет задержку
 set_tracing_disabled(True)
@@ -33,6 +56,11 @@ def _settings() -> ModelSettings:
     """tool_choice=required заставляет агента сходить в данные, а не отвечать по общим соображениям.
     После первого вызова инструмента SDK сам сбрасывает его в auto, поэтому зацикливания не будет."""
     kw = {"tool_choice": "required"}
+    if PROVIDER == "nvidia":
+        # The compatible endpoint may default to streaming and a long reasoning budget.
+        kw.update(max_tokens=1200, extra_args={"stream": False})
+        if MODEL == "nvidia/nemotron-3-super-120b-a12b":
+            kw["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
     if PROVIDER == "openai" and MODEL.startswith(("gpt-5", "o1", "o3", "o4")):
         kw["reasoning"] = Reasoning(effort="low")  # на сцене скорость важнее глубины
     return ModelSettings(**kw)

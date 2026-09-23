@@ -1,15 +1,30 @@
 import os
+import asyncio
+from collections import deque
 from pathlib import Path
+from time import monotonic
 from typing import Literal
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import dataset, graph, tools
-from .agent import LIVE, MODEL, PROVIDER, ask
+from .agent import CONFIG_ERROR, LIVE, MODEL, PROVIDER, ask
 
 app = FastAPI(title="Граф денег")
+PUBLIC_DEMO = os.getenv("PUBLIC_DEMO", "").strip().lower() in {"1", "true", "yes"}
+_chat_slots = asyncio.Semaphore(2)
+_chat_times: deque[float] = deque()
+
+
+@app.middleware("http")
+async def public_demo_guard(request: Request, call_next):
+    if (PUBLIC_DEMO and request.method == "POST"
+            and request.url.path in {"/api/recompute", "/api/dataset/upload", "/api/dataset/reset"}):
+        return JSONResponse({"detail": "В публичном демо используется готовая выгрузка."}, status_code=403)
+    return await call_next(request)
 
 
 class ChatMessage(BaseModel):
@@ -23,7 +38,8 @@ class Chat(BaseModel):
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "provider": PROVIDER, "model": MODEL, "live": LIVE}
+    return {"ok": True, "provider": PROVIDER, "model": MODEL, "live": LIVE,
+            "config_error": CONFIG_ERROR, "public_demo": PUBLIC_DEMO}
 
 
 @app.get("/api/overview")
@@ -125,7 +141,19 @@ def dataset_reset():
 
 @app.post("/api/chat")
 async def chat(body: Chat):
-    return await ask([message.model_dump() for message in body.messages])
+    messages = [message.model_dump() for message in body.messages]
+    if not PUBLIC_DEMO:
+        return await ask(messages)
+    if sum(len(message.content) for message in body.messages) > 24000:
+        raise HTTPException(413, "Слишком длинная история. Начните новый диалог.")
+    now = monotonic()
+    while _chat_times and now - _chat_times[0] >= 60:
+        _chat_times.popleft()
+    if len(_chat_times) >= 20 or _chat_slots.locked():
+        raise HTTPException(429, "AI сейчас занят. Повторите вопрос через минуту.", headers={"Retry-After": "60"})
+    _chat_times.append(now)
+    async with _chat_slots:
+        return await ask(messages)
 
 
 @app.get("/api/report")
