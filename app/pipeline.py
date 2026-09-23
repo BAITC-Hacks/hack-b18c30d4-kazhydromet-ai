@@ -50,6 +50,32 @@ def kzt(x: float) -> str:
     return f"{x:,.0f}".replace(",", " ") + " ₸"
 
 
+def plain(r) -> str:
+    """Короткое объяснение для экрана; не меняет роль или оценку узла."""
+    if r.truncated:
+        text = "Дальше данных нет: выгрузка обрывается на 4-м шаге"
+    elif r.role == "coordinator":
+        text = (f"Собирает деньги от {int(r.in_deg)} человек и раздаёт {int(r.out_deg)} людям "
+                "— похоже на организатора")
+    elif r.role == "consolidator":
+        text = f"Собирает деньги от {int(r.in_deg)} разных людей — похоже на «копилку»"
+    elif r.role == "distributor":
+        text = f"Раздаёт деньги {int(r.out_deg)} людям — «веер»"
+    elif r.role == "transit":
+        if r.is_seed or r.in_kzt == 0 or r.pass_through > 2:
+            text = "Отправляет деньги дальше — возможный транзит; часть входящих не видна"
+        elif r.fast_share >= 0.5:
+            text = "Получает и быстро пересылает дальше — похоже на «прокладку»"
+        else:
+            text = "Получает и пересылает дальше — возможная «прокладка»"
+    elif r.role == "terminal":
+        kept = "большую часть " if r.out_deg else ""
+        text = f"Похоже, получает деньги и оставляет {kept}у себя — в пределах видимой сети"
+    else:
+        text = "Явных признаков нет"
+    return text + (" (уже известен следствию)" if r.is_seed else "")
+
+
 # ------------------------------------------------------------------ загрузка и граф
 
 def load(data_dir: Path):
@@ -384,7 +410,7 @@ def run(data_dir: Path, out_dir: Path) -> dict:
                    "priority": float(r.priority_score), "is_seed": bool(r.is_seed), "depth": int(r.depth),
                    "truncated": bool(r.truncated), "in_core": bool(r.in_core),
                    "anomalies": int(r.anomaly_count), "in_kzt": float(r.in_kzt), "out_kzt": float(r.out_kzt),
-                   "evidence": r.evidence} for r in df.itertuples()],
+                   "evidence": r.evidence, "plain": plain(r)} for r in df.itertuples()],
         "edges": [{"from": str(r.src), "to": str(r.dst), "sum_kzt": float(r.sum_kzt), "n_tx": int(r.n_tx)}
                   for r in edges.itertuples()],
         "resilience": resil,

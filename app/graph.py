@@ -41,7 +41,8 @@ def _gid(g) -> int | None:
 def _brief(g: int) -> dict:
     r = _state()[0].loc[g]
     return {"gid": str(g), "role": r.role, "role_ru": pipeline.ROLE_RU[r.role],
-            "priority_score": float(r.priority_score), "cluster_id": int(r.cluster_id), "is_seed": bool(r.is_seed)}
+            "priority_score": float(r.priority_score), "cluster_id": int(r.cluster_id), "is_seed": bool(r.is_seed),
+            "plain": pipeline.plain(r)}
 
 
 def _counterparts(g: int, direction: str, limit: int) -> list[dict]:
@@ -173,9 +174,10 @@ def _chronology(tx: pd.DataFrame, p: list[int]):
 
 def overview() -> dict:
     import json
-    s = json.loads((OUT / "summary.json").read_text(encoding="utf-8"))
     df = _state()[0]
+    s = json.loads((OUT / "summary.json").read_text(encoding="utf-8"))
     s["seeds"] = int(df.is_seed.sum())
+    s["anomalies"] = int((df.anomaly_count > 0).sum())
     s["turnover_kzt"] = float(_state()[3].size(weight="sum_kzt"))
     s["in_core"] = int(df.in_core.sum())
     s["top5"] = top(5)
