@@ -1,4 +1,4 @@
-OK   full recompute under 300 s (3.94 s)
+OK   full recompute under 300 s (3.97 s)
 OK   read generated CSVs and raw parquet (saved + fresh)
 OK   nodes_roles: 2248 rows (found 2248)
 OK   nodes_roles: unique gid

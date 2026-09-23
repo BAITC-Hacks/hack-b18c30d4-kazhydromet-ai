@@ -397,9 +397,15 @@ def _mock(error: str | None = None, messages: list[dict] | None = None,
     elif len(gids) >= 2:
         r = graph.common_receivers(gids)
         rows = r["common_receivers"][:3]
-        reply = "Демо-режим (без LLM). Общие узлы ниже по потоку: " + ("; ".join(
-            f"{x['gid']} достижим по связям от {x['reached_from']} из {len(r['input'])} клиентов"
-            for x in rows) or "Общих получателей в пределах 3 переводов нет") + ". "
+        if len(r["input"]) < 2:
+            reply = ("Демо-режим (без LLM). Для поиска общих получателей нужны минимум два "
+                     f"найденных клиента; найдено: {len(r['input'])}. ")
+        else:
+            reply = "Демо-режим (без LLM). Общие узлы ниже по потоку: " + ("; ".join(
+                f"{x['gid']} достижим по связям от {x['reached_from']} из {len(r['input'])} клиентов"
+                for x in rows) or "Общих получателей в пределах 3 переводов нет") + ". "
+        if r["not_found"]:
+            reply += "Не найдены: " + ", ".join(r["not_found"]) + ". "
         reply += "Это гипотеза связи; запросите полные выписки и проверьте даты переводов."
         trace = [{"tool": "common_receivers", "args": json.dumps({"gids": gids})}]
     elif gids or (contextual_card and not top_query):

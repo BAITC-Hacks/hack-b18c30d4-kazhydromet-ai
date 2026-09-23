@@ -44,6 +44,14 @@
     }
   }
 
+  function explanation(item) {
+    if (!item) return '';
+    if (item.key !== 'truncated' && item.gid && scenarios[0].gid === scenarios[1].gid) {
+      return 'Один клиент подходит для двух сценариев: кандидат в организаторы и признаки необычных переводов. Изучите основания в карточке — оба вывода остаются гипотезами.';
+    }
+    return item.hint;
+  }
+
   function refresh(settled = true) {
     const nodes = typeof state !== 'undefined' ? state.graph?.nodes : null;
     panel.classList.toggle('scenario-error', settled && !Array.isArray(nodes));
@@ -59,7 +67,7 @@
     } else if (!scenarios.some(item => item.gid)) {
       hint.textContent = 'В текущей сети нет клиентов для этих сценариев. Можно начать со списка приоритетов.';
     } else {
-      hint.textContent = scenarios.find(item => item.key === selectedKey && item.gid === state.selected)?.hint || 'Три отправные точки: роль клиента, необычные переводы и граница доступных данных.';
+      hint.textContent = explanation(scenarios.find(item => item.key === selectedKey && item.gid === state.selected)) || 'Три отправные точки: роль клиента, необычные переводы и граница доступных данных.';
     }
     updateSelection();
   }
@@ -82,7 +90,7 @@
         hint.textContent = 'Карточка недоступна. Нажмите сценарий ещё раз, чтобы повторить загрузку.';
         return;
       }
-      hint.textContent = item.hint;
+      hint.textContent = explanation(item);
       if (item.key === 'anomalies') document.getElementById('showAnomaly')?.click();
     } catch {
       hint.textContent = 'Карточка недоступна. Нажмите сценарий ещё раз, чтобы повторить загрузку.';

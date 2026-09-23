@@ -256,7 +256,7 @@ def assign_role(r) -> tuple[str, float, str]:
                 f"получил {kzt(r.in_kzt)}, {pt_txt} ({r.out_deg} получ.){fast}")
         if pd.notna(pt) and pt > T["transit_pt_hi"]:
             return "transit", 0.35, (
-                f"отдал {kzt(r.out_kzt)} при видимых входящих {kzt(r.in_kzt)} — есть поступления вне выгрузки{fast}")
+                f"отдал {kzt(r.out_kzt)} при видимых входящих {kzt(r.in_kzt)} — полнота входа и начальный остаток неизвестны{fast}")
         return "peripheral", 0.5, (
             f"получил {kzt(r.in_kzt)}, {pt_txt}; ни сбора, ни веера, ни чистого транзита")
 
