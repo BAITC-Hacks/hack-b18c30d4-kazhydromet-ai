@@ -171,4 +171,15 @@ def analyst_report(top: int = 10, gids: str | None = None):
     )
 
 
+@app.get("/api/review-coverage")
+def review_coverage(gids: str = ""):
+    """Охват видимых переводов выбранным перечнем без двойного счёта."""
+    from .coverage import review_coverage as calculate_coverage
+
+    selected = [gid.strip() for gid in gids.split(",") if gid.strip()]
+    if len(gids) > 2000 or len(set(selected)) > 100:
+        raise HTTPException(422, "Допустимо не более 100 клиентов в перечне.")
+    return calculate_coverage(selected)
+
+
 app.mount("/", StaticFiles(directory=Path(__file__).resolve().parent.parent / "web", html=True), name="web")

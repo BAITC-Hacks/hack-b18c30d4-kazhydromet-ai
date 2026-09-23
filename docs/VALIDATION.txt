@@ -1,0 +1,21 @@
+OK   full recompute under 300 s (4.33 s)
+OK   read generated CSVs and raw parquet (saved + fresh)
+OK   nodes_roles: 2248 rows (found 2248)
+OK   nodes_roles: unique gid
+OK   nodes_roles: gid match raw nodes
+OK   nodes_roles: required columns
+OK   nodes_roles: no empty required values
+OK   nodes_roles: roles in dictionary (invalid 0)
+OK   nodes_roles: role_score in [0,1] (invalid 0)
+OK   nodes_roles: priority_score in [0,1] (invalid 0)
+OK   nodes_roles: evidence 1..200 chars with a digit (invalid 0)
+OK   clusters: required columns
+OK   clusters: covers every node cluster_id
+OK   clusters: sum n_nodes = 2248 (found 2248)
+OK   clusters: sum n_seed = 81 (found 81)
+OK   top_nodes: at least 20 rows (found 50)
+OK   top_nodes: required columns
+OK   top_nodes: descending priority
+OK   top_nodes: gid in nodes_roles
+OK   top_nodes: consecutive rank
+OK   depth=4 with out_deg=0: no terminal role (checked 444, invalid 0)

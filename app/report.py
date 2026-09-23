@@ -167,6 +167,8 @@ def node_section(gid: str) -> str:
 
 def build_report(gids: list[str] | None = None, top: int = 10) -> str:
     """Build a ranked review list with node cards and explicit data limitations."""
+    from .coverage import review_coverage
+
     if gids is None:
         selected = [row["gid"] for row in graph.top(max(0, top))]
     else:
@@ -191,6 +193,33 @@ def build_report(gids: list[str] | None = None, top: int = 10) -> str:
 
     known_gids = [card["gid"] for _, card in cards if "error" not in card]
     known_cards = [card for _, card in cards if "error" not in card]
+    coverage = review_coverage(known_gids)
+    coverage_lines = [
+        "## Охват выбранной проверки",
+        "",
+        f"Клиентов в расчёте: **{coverage['n_selected']}**. "
+        f"Связанных с ними видимых переводов: **{coverage['n_transactions']}** "
+        f"из **{coverage['total_transactions']}** "
+        f"(**{_score(100 * coverage['transactions_share'], 1)} %** операций выгрузки).",
+        "",
+        f"Сумма этих переводов: **{_kzt(coverage['sum_kzt'])}** "
+        f"из **{_kzt(coverage['total_kzt'])}** "
+        f"(**{_score(100 * coverage['volume_share'], 1)} %** видимого оборота). "
+        f"Направленных связей: **{coverage['n_edges']}**; "
+        f"разных контрагентов помимо клиентов в расчёте: **{coverage['n_counterparties']}**.",
+        "",
+        "Учтены операции, где хотя бы одна сторона входит в выбранный перечень. "
+        "Каждый перевод посчитан один раз, включая переводы между двумя выбранными клиентами. "
+        "Показатель описывает охват данных для проверки и не оценивает законность операций. "
+        "Неизвестные gid не увеличивают охват; недостающие операции за пределами выгрузки не учитываются.",
+    ]
+    if coverage.get("ignored_gids"):
+        coverage_lines.extend([
+            "",
+            f"**Ограничение расчёта:** учтены первые {coverage['n_selected']} найденных клиентов "
+            f"по порядку перечня; ещё {len(coverage['ignored_gids'])} клиентов не вошли в расчёт охвата. "
+            "Их карточки сохранены в отчёте.",
+        ])
     if known_cards:
         first_card = known_cards[0]
         summary = (f"Выбрано клиентов: **{len(cards)}**; найдены в выгрузке: **{len(known_cards)}**; "
@@ -216,6 +245,7 @@ def build_report(gids: list[str] | None = None, top: int = 10) -> str:
         "2. Роли — гипотезы по связям, суммам и времени переводов; приоритет — относительный балл 0–1.\n"
         "3. Пороговые правила, формула и ограничения описаны в [README](../README.md).",
         "## Перечень для проверки\n\n" + "\n".join(rows),
+        "\n".join(coverage_lines),
     ]
     sections.extend(_node_section(card, gid) for gid, card in cards)
     if known_gids:

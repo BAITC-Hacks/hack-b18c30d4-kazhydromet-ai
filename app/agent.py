@@ -214,6 +214,19 @@ def _mock(error: str | None = None, messages: list[dict] | None = None) -> dict:
         if "error" not in c:
             reply += " Следующее действие: " + (c["gaps"][0] if c["gaps"] else "запросить полную выписку для проверки гипотезы") + "."
         trace = [{"tool": "node_card", "args": json.dumps({"gid": gids[0]})}]
+    elif re.search(r"\b(?:топ|top)\b|кого|приоритет", q, re.I):
+        requested = re.search(r"\b\d+\b", q)
+        digits = requested.group().lstrip("0") if requested else "5"
+        count = 20 if len(digits) > 2 else max(1, min(20, int(digits or "0")))
+        rows = graph.top(count)
+        reply = f"Демо-режим (без LLM). Первые {len(rows)} клиентов по приоритету проверки:\n"
+        reply += "\n".join(
+            f"{row['rank']}. {row['gid']}: {row['plain']}. Основание: {row['evidence']}."
+            for row in rows
+        )
+        reply += ("\nСледующее действие: откройте карточки выбранных клиентов и запросите недостающие "
+                  "сведения. Роли — гипотезы для проверки, не доказательство вины.")
+        trace = [{"tool": "top_priority", "args": json.dumps({"n": count})}]
     else:
         o = graph.overview()
         t = o["top5"][0]
