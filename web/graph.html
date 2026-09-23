@@ -118,7 +118,7 @@ async function api(url, opt) {
 }
 
 // ---------- граф
-let G = null, byId = {}, outAdj = {}, inAdj = {}, net = null, colorBy = "role", view = "top", selected = null;
+let G = null, byId = {}, outAdj = {}, inAdj = {}, net = null, colorBy = "role", view = "top", selected = null, pendingNode = null;
 
 function nodeStyle(n) {
   const base = colorBy === "role" ? ROLES[n.role].c : clusterColor(n.cluster);
@@ -145,7 +145,7 @@ function render(ids, physicsAll = false) {
   $("#netMsg").style.display = "none";
   const data = {nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges)};
   const options = {
-    interaction: {hover: true, tooltipDelay: 120},
+    interaction: {hover: true, tooltipDelay: 120, keyboard: false},
     layout: {improvedLayout: false},
     physics: {solver: "forceAtlas2Based", stabilization: {iterations: physicsAll ? 150 : 250},
               forceAtlas2Based: {gravitationalConstant: -40, springLength: 70}},
@@ -194,6 +194,12 @@ function legend() {
 // ---------- карточка
 async function openNode(gid, redraw = true) {
   gid = String(gid).trim();
+  if (!gid) return;
+  if (!G) {
+    pendingNode = {gid, redraw};
+    $("#card").textContent = "Загружаю граф — затем открою выбранного клиента…";
+    return;
+  }
   if (!byId[gid]) {
     const m = G.nodes.filter(n => n.id.endsWith(gid));
     if (m.length === 1) gid = m[0].id;
@@ -328,8 +334,14 @@ async function init() {
     G.edges.forEach(e => { (outAdj[e.from] ||= []).push(e.to); (inAdj[e.to] ||= []).push(e.from); });
     if (typeof vis === "undefined") throw new Error("библиотека vis-network не загрузилась (нет интернета?)");
     const h = decodeURIComponent(location.hash.slice(1));
-    if (h && !selected) openNode(h); else selected ? render(ego(selected)) : showView("top");
-  } catch (e) { $("#netMsg").textContent = "Схема недоступна: " + e.message; $("#netMsg").style.display = "grid"; }
+    if (pendingNode) {
+      const pending = pendingNode; pendingNode = null;
+      openNode(pending.gid, pending.redraw);
+    } else if (h && !selected) openNode(h); else selected ? render(ego(selected)) : showView("top");
+  } catch (e) {
+    $("#netMsg").textContent = "Схема недоступна: " + e.message; $("#netMsg").style.display = "grid";
+    if (pendingNode) $("#card").textContent = "Не удалось загрузить граф. Повторите загрузку страницы, чтобы открыть клиента.";
+  }
 }
 init();
 </script>

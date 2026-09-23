@@ -42,6 +42,21 @@
     for (const id of ['timelinePlay', 'timelinePrev', 'timelineNext', 'timelineRange']) el(id).disabled = disabled;
   }
 
+  function clearSelection(message) {
+    ++version;
+    stop();
+    data = null;
+    loading = false;
+    controlsDisabled(true);
+    el('timelineBars').replaceChildren();
+    for (const id of ['timelineIn', 'timelineOut']) el(id).textContent = '—';
+    for (const id of ['timelineInCount', 'timelineOutCount', 'timelineStart', 'timelineEnd', 'timelineCaveat']) el(id).textContent = '';
+    el('timelineRange').value = '0';
+    el('timelineRange').removeAttribute('aria-valuetext');
+    el('timelineDate').textContent = message;
+    el('timelineDayNote').textContent = 'Данные относятся только к выбранному клиенту. Можно вернуться ко всему периоду.';
+  }
+
   function setDay(next) {
     if (!active || !data || data.gid !== state.selected) return;
     index = Math.min(Math.max(0, next), data.days.length - 1);
@@ -178,6 +193,12 @@
     el('timelineToggle').disabled = false;
     if (active && (!data || data.gid !== event.detail.gid || graphChanging)) load(event.detail.gid);
     graphChanging = false;
+  });
+  window.addEventListener('aml:node-loading', () => {
+    if (active) clearSelection('Загружаю клиента…');
+  });
+  window.addEventListener('aml:node-error', () => {
+    if (active) clearSelection('Данные клиента недоступны');
   });
   window.addEventListener('aml:graph', event => {
     graphChanging = true;
